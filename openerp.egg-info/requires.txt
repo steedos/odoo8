@@ -1,0 +1,36 @@
+pychart
+babel >= 1.0
+docutils
+feedparser
+gdata
+gevent
+psycogreen
+Jinja2
+lxml
+mako
+mock
+pillow
+psutil
+psycopg2 >= 2.2
+pydot
+pyparsing < 2
+pyserial
+python-dateutil < 2
+python-ldap
+python-openid
+pytz
+pyusb >= 1.0.0b1
+pywebdav < 0.9.8
+pyyaml
+qrcode
+reportlab
+requests
+simplejson
+unittest2
+vatnumber
+vobject
+werkzeug
+xlwt
+
+[SSL]
+pyopenssl
