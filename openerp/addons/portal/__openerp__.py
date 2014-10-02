@@ -41,16 +41,16 @@ The module also associates user groups to the portal users (adding a group in
 the portal automatically adds it to the portal users, etc).  That feature is
 very handy when used in combination with the module 'share'.
     """,
-    'website': 'http://www.openerp.com',
+    'website': 'https://www.odoo.com',
     'data': [
         'portal_data.xml',
         'portal_view.xml',
         'wizard/portal_wizard_view.xml',
         'wizard/share_wizard_view.xml',
         'security/ir.model.access.csv',
+        'views/portal.xml',
     ],
     'demo': ['portal_demo.xml'],
-    'css': ['static/src/css/portal.css'],
     'auto_install': True,
     'installable': True,
 }

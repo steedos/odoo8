@@ -1,17 +1,22 @@
 # -*- coding: utf-8 -*-
+import cStringIO
+import contextlib
+import datetime
 import hashlib
 import inspect
-import itertools
 import logging
 import math
 import mimetypes
+import unicodedata
+import os
 import re
+import time
 import urlparse
 
+from PIL import Image
+from sys import maxint
+
 import werkzeug
-import werkzeug.exceptions
-import werkzeug.utils
-import werkzeug.wrappers
 # optional python-slugify import (https://github.com/un33k/python-slugify)
 try:
     import slugify as slugify_lib
@@ -20,6 +25,7 @@ except ImportError:
 
 import openerp
 from openerp.osv import orm, osv, fields
+from openerp.tools import html_escape as escape, ustr, image_resize_and_sharpen, image_save_for_web
 from openerp.tools.safe_eval import safe_eval
 from openerp.addons.web.http import request
 
@@ -57,43 +63,74 @@ def url_for(path_or_uri, lang=None):
 
     return location.decode('utf-8')
 
-def is_multilang_url(path, langs=None):
+def is_multilang_url(local_url, langs=None):
     if not langs:
         langs = [lg[0] for lg in request.website.get_languages()]
-    spath = path.split('/')
+    spath = local_url.split('/')
     # if a language is already in the path, remove it
     if spath[1] in langs:
         spath.pop(1)
-        path = '/'.join(spath)
+        local_url = '/'.join(spath)
     try:
+        # Try to match an endpoint in werkzeug's routing table
+        url = local_url.split('?')
+        path = url[0]
+        query_string = url[1] if len(url) > 1 else None
         router = request.httprequest.app.get_db_router(request.db).bind('')
-        func = router.match(path)[0]
-        return func.routing.get('multilang', False)
+        func = router.match(path, query_args=query_string)[0]
+        return func.routing.get('website', False) and func.routing.get('multilang', True)
     except Exception:
         return False
 
 def slugify(s, max_length=None):
+    """ Transform a string to a slug that can be used in a url path.
+
+    This method will first try to do the job with python-slugify if present.
+    Otherwise it will process string by stripping leading and ending spaces,
+    converting unicode chars to ascii, lowering all chars and replacing spaces
+    and underscore with hyphen "-".
+
+    :param s: str
+    :param max_length: int
+    :rtype: str
+    """
+    s = ustr(s)
     if slugify_lib:
         # There are 2 different libraries only python-slugify is supported
         try:
             return slugify_lib.slugify(s, max_length=max_length)
         except TypeError:
             pass
-    spaceless = re.sub(r'\s+', '-', s)
-    specialless = re.sub(r'[^-_A-Za-z0-9]', '', spaceless)
-    return specialless[:max_length]
+    uni = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('ascii')
+    slug = re.sub('[\W_]', ' ', uni).strip().lower()
+    slug = re.sub('[-\s]+', '-', slug)
+
+    return slug[:max_length]
 
 def slug(value):
     if isinstance(value, orm.browse_record):
         # [(id, name)] = value.name_get()
-        id, name = value.id, value[value._rec_name]
+        id, name = value.id, value.display_name
     else:
         # assume name_search result tuple
         id, name = value
-    slugname = slugify(name or '')
+    slugname = slugify(name or '').strip().strip('-')
     if not slugname:
         return str(id)
     return "%s-%d" % (slugname, id)
+
+
+# NOTE: as the pattern is used as it for the ModelConverter (ir_http.py), do not use any flags
+_UNSLUG_RE = re.compile(r'(?:(\w{1,2}|\w[A-Za-z0-9-_]+?\w)-)?(-?\d+)(?=$|/)')
+
+def unslug(s):
+    """Extract slug and id from a string.
+        Always return un 2-tuple (str|None, int|None)
+    """
+    m = _UNSLUG_RE.match(s)
+    if not m:
+        return None, None
+    return m.group(1), int(m.group(2))
 
 def urlplus(url, params):
     return werkzeug.Href(url)(params or None)
@@ -108,10 +145,6 @@ class website(osv.osv):
         menus = self.pool.get('website.menu').search(cr, uid, root_domain, order='id', context=context)
         menu = menus and menus[0] or False
         return dict( map(lambda x: (x, menu), ids) )
-
-    def _get_public_user(self, cr, uid, ids, name='public_user', arg=(), context=None):
-        ref = self.get_public_user(cr, uid, context=context)
-        return dict( map(lambda x: (x, ref), ids) )
 
     _name = "website" # Avoid website.website convention for conciseness (for new api). Got a special authorization from xmo and rco
     _description = "Website"
@@ -129,11 +162,15 @@ class website(osv.osv):
         'social_googleplus': fields.char('Google+ Account'),
         'google_analytics_key': fields.char('Google Analytics Key'),
         'user_id': fields.many2one('res.users', string='Public User'),
-        'public_user': fields.function(_get_public_user, relation='res.users', type='many2one', string='Public User'),
+        'partner_id': fields.related('user_id','partner_id', type='many2one', relation='res.partner', string='Public Partner'),
         'menu_id': fields.function(_get_menu, relation='website.menu', type='many2one', string='Main Menu',
             store= {
                 'website.menu': (_get_menu_website, ['sequence','parent_id','website_id'], 10)
             })
+    }
+
+    _defaults = {
+        'company_id': lambda self,cr,uid,c: self.pool['ir.model.data'].xmlid_to_res_id(cr, openerp.SUPERUSER_ID, 'base.public_user'),
     }
 
     # cf. Wizard hack in website_views.xml
@@ -182,14 +219,12 @@ class website(osv.osv):
 
     def page_exists(self, cr, uid, ids, name, module='website', context=None):
         try:
-           return self.pool["ir.model.data"].get_object_reference(cr, uid, module, name)
+            name = (name or "").replace("/page/website.", "").replace("/page/", "")
+            if not name:
+                return False
+            return self.pool["ir.model.data"].get_object_reference(cr, uid, module, name)
         except:
             return False
-
-    def get_public_user(self, cr, uid, context=None):
-        uid = openerp.SUPERUSER_ID
-        res = self.pool['ir.model.data'].get_object_reference(cr, uid, 'base', 'public_user')
-        return res and res[1] or False
 
     @openerp.tools.ormcache(skiparg=3)
     def _get_languages(self, cr, uid, id, context=None):
@@ -197,34 +232,53 @@ class website(osv.osv):
         return [(lg.code, lg.name) for lg in website.language_ids]
 
     def get_languages(self, cr, uid, ids, context=None):
-        return self._get_languages(cr, uid, ids[0])
+        return self._get_languages(cr, uid, ids[0], context=context)
+
+    def get_alternate_languages(self, cr, uid, ids, req=None, context=None):
+        langs = []
+        if req is None:
+            req = request.httprequest
+        default = self.get_current_website(cr, uid, context=context).default_lang_code
+        uri = req.path
+        if req.query_string:
+            uri += '?' + req.query_string
+        shorts = []
+        for code, name in self.get_languages(cr, uid, ids, context=context):
+            lg_path = ('/' + code) if code != default else ''
+            lg = code.split('_')
+            shorts.append(lg[0])
+            lang = {
+                'hreflang': ('-'.join(lg)).lower(),
+                'short': lg[0],
+                'href': req.url_root[0:-1] + lg_path + uri,
+            }
+            langs.append(lang)
+        for lang in langs:
+            if shorts.count(lang['short']) == 1:
+                lang['hreflang'] = lang['short']
+        return langs
 
     def get_current_website(self, cr, uid, context=None):
         # TODO: Select website, currently hard coded
         return self.pool['website'].browse(cr, uid, 1, context=context)
 
-    def preprocess_request(self, cr, uid, ids, request, context=None):
-        # TODO FP: is_website_publisher and editable in context should be removed
-        # for performance reasons (1 query per image to load) but also to be cleaner
-        # I propose to replace this by a group 'base.group_website_publisher' on the
-        # view that requires it.
-        Access = request.registry['ir.model.access']
-        is_website_publisher = Access.check(cr, uid, 'ir.ui.view', 'write', False, context)
+    def is_publisher(self, cr, uid, ids, context=None):
+        Access = self.pool['ir.model.access']
+        is_website_publisher = Access.check(cr, uid, 'ir.ui.view', 'write', False, context=context)
+        return is_website_publisher
 
-        lang = request.context['lang']
-        is_master_lang = lang == request.website.default_lang_code
-
-        request.redirect = lambda url: werkzeug.utils.redirect(url_for(url))
-        request.context.update(
-            editable=is_website_publisher,
-            translatable=not is_master_lang,
-        )
+    def is_user(self, cr, uid, ids, context=None):
+        Access = self.pool['ir.model.access']
+        return Access.check(cr, uid, 'ir.ui.menu', 'read', False, context=context)
 
     def get_template(self, cr, uid, ids, template, context=None):
-        if '.' not in template:
-            template = 'website.%s' % template
-        module, xmlid = template.split('.', 1)
-        model, view_id = request.registry["ir.model.data"].get_object_reference(cr, uid, module, xmlid)
+        if isinstance(template, (int, long)):
+            view_id = template
+        else:
+            if '.' not in template:
+                template = 'website.%s' % template
+            module, xmlid = template.split('.', 1)
+            model, view_id = request.registry["ir.model.data"].get_object_reference(cr, uid, module, xmlid)
         return self.pool["ir.ui.view"].browse(cr, uid, view_id, context=context)
 
     def _render(self, cr, uid, ids, template, values=None, context=None):
@@ -239,7 +293,7 @@ class website(osv.osv):
         # Compute Pager
         page_count = int(math.ceil(float(total) / step))
 
-        page = max(1, min(int(page), page_count))
+        page = max(1, min(int(page if str(page).isdigit() else 1), page_count))
         scope -= 1
 
         pmin = max(page - int(math.floor(scope/2)), 1)
@@ -293,44 +347,23 @@ class website(osv.osv):
         endpoint = rule.endpoint
         methods = rule.methods or ['GET']
         converters = rule._converters.values()
-
-        return (
-            'GET' in methods
+        if not ('GET' in methods
             and endpoint.routing['type'] == 'http'
             and endpoint.routing['auth'] in ('none', 'public')
             and endpoint.routing.get('website', False)
-            # preclude combinatorial explosion by only allowing a single converter
-            and len(converters) <= 1
-            # ensure all converters on the rule are able to generate values for
-            # themselves
             and all(hasattr(converter, 'generate') for converter in converters)
-        ) and self.endpoint_is_enumerable(rule)
-
-    def endpoint_is_enumerable(self, rule):
-        """ Verifies that it's possible to generate a valid url for the rule's
-        endpoint
-
-        :type rule: werkzeug.routing.Rule
-        :rtype: bool
-        """
-        spec = inspect.getargspec(rule.endpoint.method)
-
-        # if *args bail the fuck out, only dragons can live there
-        if spec.varargs:
+            and endpoint.routing.get('website')):
             return False
 
-        # remove all arguments with a default value from the list
-        defaults_count = len(spec.defaults or []) # spec.defaults can be None
-        # a[:-0] ~ a[:0] ~ [] -> replace defaults_count == 0 by None to get
-        # a[:None] ~ a
-        args = spec.args[:(-defaults_count or None)]
+        # dont't list routes without argument having no default value or converter
+        spec = inspect.getargspec(endpoint.method.original_func)
 
-        # params with defaults were removed, leftover allowed are:
-        # * self (technically should be first-parameter-of-instance-method but whatever)
-        # * any parameter mapping to a converter
-        return all(
-            (arg == 'self' or arg in rule._converters)
-            for arg in args)
+        # remove self and arguments having a default value
+        defaults_count = len(spec.defaults or [])
+        args = spec.args[1:(-defaults_count or None)]
+
+        # check that all args have a converter
+        return all( (arg in rule._converters) for arg in args)
 
     def enumerate_pages(self, cr, uid, ids, query_string=None, context=None):
         """ Available pages in the website/CMS. This is mostly used for links
@@ -348,66 +381,53 @@ class website(osv.osv):
         """
         router = request.httprequest.app.get_db_router(request.db)
         # Force enumeration to be performed as public user
-        uid = self.get_public_user(cr, uid, context=context)
         url_list = []
         for rule in router.iter_rules():
             if not self.rule_is_enumerable(rule):
                 continue
 
-            converters = rule._converters
-            filtered = bool(converters)
-            if converters:
-                # allow single converter as decided by fp, checked by
-                # rule_is_enumerable
-                [(name, converter)] = converters.items()
-                converter_values = converter.generate(
-                    request.cr, uid, query=query_string, context=context)
-                generated = ({k: v} for k, v in itertools.izip(
-                    itertools.repeat(name), converter_values))
-            else:
-                # force single iteration for literal urls
-                generated = [{}]
+            converters = rule._converters or {}
+            if query_string and not converters and (query_string not in rule.build([{}], append_unknown=False)[1]):
+                continue
+            values = [{}]
+            convitems = converters.items()
+            # converters with a domain are processed after the other ones
+            gd = lambda x: hasattr(x[1], 'domain') and (x[1].domain <> '[]')
+            convitems.sort(lambda x, y: cmp(gd(x), gd(y)))
+            for (i,(name, converter)) in enumerate(convitems):
+                newval = []
+                for val in values:
+                    query = i==(len(convitems)-1) and query_string
+                    for v in converter.generate(request.cr, uid, query=query, args=val, context=context):
+                        newval.append( val.copy() )
+                        v[name] = v['loc']
+                        del v['loc']
+                        newval[-1].update(v)
+                values = newval
 
-            for values in generated:
-                domain_part, url = rule.build(values, append_unknown=False)
-                page = {'name': url, 'url': url}
+            for value in values:
+                domain_part, url = rule.build(value, append_unknown=False)
+                page = {'loc': url}
+                for key,val in value.items():
+                    if key.startswith('__'):
+                        page[key[2:]] = val
+                if url in ('/sitemap.xml',):
+                    continue
                 if url in url_list:
                     continue
                 url_list.append(url)
-                if not filtered and query_string and not self.page_matches(cr, uid, page, query_string, context=context):
-                    continue
+
                 yield page
 
     def search_pages(self, cr, uid, ids, needle=None, limit=None, context=None):
-        return list(itertools.islice(
-            self.enumerate_pages(cr, uid, ids, query_string=needle, context=context),
-            limit))
-
-    def page_matches(self, cr, uid, page, needle, context=None):
-        """ Checks that a "page" matches a user-provide search string.
-
-        The default implementation attempts to perform a non-contiguous
-        substring match of the page's name.
-
-        :param page: {'name': str, 'url': str}
-        :param needle: str
-        :rtype: bool
-        """
-        haystack = page['name'].lower()
-
-        needle = iter(needle.lower())
-        n = next(needle)
-        end = object()
-
-        for char in haystack:
-            if char != n: continue
-
-            n = next(needle, end)
-            # found all characters of needle in haystack in order
-            if n is end:
-                return True
-
-        return False
+        name = (needle or "").replace("/page/website.", "").replace("/page/", "")
+        res = []
+        for page in self.enumerate_pages(cr, uid, ids, query_string=name, context=context):
+            if needle in page['loc']:
+                res.append(page)
+                if len(res) == limit:
+                    break
+        return res
 
     def kanban(self, cr, uid, ids, model, domain, column, template, step=None, scope=None, orderby=None, context=None):
         step = step and int(step) or 10
@@ -483,12 +503,116 @@ class website(osv.osv):
             html += request.website._render(template, {'object_id': object_id})
         return html
 
+    def _image_placeholder(self, response):
+        # file_open may return a StringIO. StringIO can be closed but are
+        # not context managers in Python 2 though that is fixed in 3
+        with contextlib.closing(openerp.tools.misc.file_open(
+                os.path.join('web', 'static', 'src', 'img', 'placeholder.png'),
+                mode='rb')) as f:
+            response.data = f.read()
+            return response.make_conditional(request.httprequest)
+
+    def _image(self, cr, uid, model, id, field, response, max_width=maxint, max_height=maxint, cache=None, context=None):
+        """ Fetches the requested field and ensures it does not go above
+        (max_width, max_height), resizing it if necessary.
+
+        Resizing is bypassed if the object provides a $field_big, which will
+        be interpreted as a pre-resized version of the base field.
+
+        If the record is not found or does not have the requested field,
+        returns a placeholder image via :meth:`~._image_placeholder`.
+
+        Sets and checks conditional response parameters:
+        * :mailheader:`ETag` is always set (and checked)
+        * :mailheader:`Last-Modified is set iif the record has a concurrency
+          field (``__last_update``)
+
+        The requested field is assumed to be base64-encoded image data in
+        all cases.
+        """
+        Model = self.pool[model]
+        id = int(id)
+
+        ids = Model.search(cr, uid,
+                           [('id', '=', id)], context=context)
+        if not ids and 'website_published' in Model._all_columns:
+            ids = Model.search(cr, openerp.SUPERUSER_ID,
+                               [('id', '=', id), ('website_published', '=', True)], context=context)
+        if not ids:
+            return self._image_placeholder(response)
+
+        concurrency = '__last_update'
+        [record] = Model.read(cr, openerp.SUPERUSER_ID, [id],
+                              [concurrency, field],
+                              context=context)
+
+        if concurrency in record:
+            server_format = openerp.tools.misc.DEFAULT_SERVER_DATETIME_FORMAT
+            try:
+                response.last_modified = datetime.datetime.strptime(
+                    record[concurrency], server_format + '.%f')
+            except ValueError:
+                # just in case we have a timestamp without microseconds
+                response.last_modified = datetime.datetime.strptime(
+                    record[concurrency], server_format)
+
+        # Field does not exist on model or field set to False
+        if not record.get(field):
+            # FIXME: maybe a field which does not exist should be a 404?
+            return self._image_placeholder(response)
+
+        response.set_etag(hashlib.sha1(record[field]).hexdigest())
+        response.make_conditional(request.httprequest)
+
+        if cache:
+            response.cache_control.max_age = cache
+            response.expires = int(time.time() + cache)
+
+        # conditional request match
+        if response.status_code == 304:
+            return response
+
+        data = record[field].decode('base64')
+        image = Image.open(cStringIO.StringIO(data))
+        response.mimetype = Image.MIME[image.format]
+
+        filename = '%s_%s.%s' % (model.replace('.', '_'), id, str(image.format).lower())
+        response.headers['Content-Disposition'] = 'inline; filename="%s"' % filename
+
+        if (not max_width) and (not max_height):
+            response.data = data
+            return response
+
+        w, h = image.size
+        max_w = int(max_width) if max_width else maxint
+        max_h = int(max_height) if max_height else maxint
+
+        if w < max_w and h < max_h:
+            response.data = data
+        else:
+            size = (max_w, max_h)
+            img = image_resize_and_sharpen(image, size)
+            image_save_for_web(img, response.stream, format=image.format)
+            # invalidate content-length computed by make_conditional as
+            # writing to response.stream does not do it (as of werkzeug 0.9.3)
+            del response.headers['Content-Length']
+
+        return response
+
+    def image_url(self, cr, uid, record, field, size=None, context=None):
+        """Returns a local url that points to the image field of a given browse record."""
+        model = record._name
+        id = '%s_%s' % (record.id, hashlib.sha1(record.sudo().write_date).hexdigest()[0:7])
+        size = '' if size is None else '/%s' % size
+        return '/website/image/%s/%s/%s%s' % (model, id, field, size)
+
+
 class website_menu(osv.osv):
     _name = "website.menu"
     _description = "Website Menu"
     _columns = {
-        'name': fields.char('Menu', size=64, required=True, translate=True),
-        'url': fields.char('Url', translate=True),
+        'name': fields.char('Menu', required=True, translate=True),
+        'url': fields.char('Url'),
         'new_window': fields.boolean('New Window'),
         'sequence': fields.integer('Sequence'),
         # TODO: support multiwebsite once done for ir.ui.views
@@ -557,13 +681,7 @@ class ir_attachment(osv.osv):
             if attach.url:
                 result[attach.id] = attach.url
             else:
-                result[attach.id] = urlplus('/website/image', {
-                    'model': 'ir.attachment',
-                    'field': 'datas',
-                    'id': attach.id,
-                    'max_width': 1024,
-                    'max_height': 768,
-                })
+                result[attach.id] = self.pool['website'].image_url(cr, uid, attach, 'datas')
         return result
     def _datas_checksum(self, cr, uid, ids, name, arg, context=None):
         return dict(
@@ -637,8 +755,8 @@ class ir_attachment(osv.osv):
         for attachment in self.browse(cr, uid, ids, context=context):
             # in-document URLs are html-escaped, a straight search will not
             # find them
-            url = werkzeug.utils.escape(attachment.website_url)
-            ids = Views.search(cr, uid, [('arch', 'like', url)], context=context)
+            url = escape(attachment.website_url)
+            ids = Views.search(cr, uid, ["|", ('arch', 'like', '"%s"' % url), ('arch', 'like', "'%s'" % url)], context=context)
 
             if ids:
                 removal_blocked_by[attachment.id] = Views.read(

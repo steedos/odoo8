@@ -36,9 +36,9 @@ class account_voucher(osv.osv):
         return journal_pool.search(cr, uid, [('type', '=', ttype)], limit=1)
 
     _columns = {
-        'amount_in_word' : fields.char("Amount in Word" , size=128, readonly=True, states={'draft':[('readonly',False)]}),
+        'amount_in_word' : fields.char("Amount in Word", readonly=True, states={'draft':[('readonly',False)]}),
         'allow_check' : fields.related('journal_id', 'allow_check_writing', type='boolean', string='Allow Check Writing'),
-        'number': fields.char('Number', size=32),
+        'number': fields.char('Number'),
     }
 
     def _amount_to_text(self, cr, uid, amount, currency_id, context=None):
@@ -74,26 +74,17 @@ class account_voucher(osv.osv):
 
     def print_check(self, cr, uid, ids, context=None):
         if not ids:
-            return  {}
+            raise osv.except_osv(_('Printing error'), _('No check selected '))
 
-        check_layout_report = {
-            'top' : 'account.print.check.top',
-            'middle' : 'account.print.check.middle',
-            'bottom' : 'account.print.check.bottom',
+        data = {
+            'id': ids and ids[0],
+            'ids': ids,
         }
 
-        check_layout = self.browse(cr, uid, ids[0], context=context).company_id.check_layout
-        return {
-            'type': 'ir.actions.report.xml', 
-            'report_name':check_layout_report[check_layout],
-            'datas': {
-                    'model':'account.voucher',
-                    'id': ids and ids[0] or False,
-                    'ids': ids and ids or [],
-                    'report_type': 'pdf'
-                },
-            'nodestroy': True
-            }
+        return self.pool['report'].get_action(
+            cr, uid, [], 'account_check_writing.report_check', data=data, context=context
+        )
+
     def create(self, cr, uid, vals, context=None):
         if vals.get('amount') and vals.get('journal_id') and 'amount_in_word' not in vals:
             vals['amount_in_word'] = self._amount_to_text(cr, uid, vals['amount'], vals.get('currency_id') or \

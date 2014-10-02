@@ -11,17 +11,18 @@ Lets the company customize which Pad installation should be used to link to new
 pads (by default, http://ietherpad.com/).
     """,
     'author': 'OpenERP SA',
-    'website': 'http://openerp.com',
-    'depends': ['base'],
-    'data': ['res_company.xml'],
+    'website': 'https://www.odoo.com/page/notes',
+    'depends': ['web'],
+    'data': [
+        'res_company.xml',
+        'views/pad.xml',
+    ],
     'demo': ['pad_demo.xml'],
     'installable': True,
     'auto_install': False,
     'web': True,
-    'js': ['static/src/js/pad.js'],
     'qweb' : ['static/src/xml/*.xml'],
     'images': ['static/src/img/pad_link_companies.jpeg'],
-    'css': ['static/src/css/etherpad.css',],
 }
 
 # vim:expandtab:smartindent:tabstop=4:softtabstop=4:shiftwidth=4:

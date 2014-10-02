@@ -22,6 +22,7 @@
 {
     'name': 'Customer References',
     'category': 'Website',
+    'website': 'https://www.odoo.com/page/website-builder',
     'summary': 'Publish Your Customer References',
     'version': '1.0',
     'description': """
@@ -30,8 +31,9 @@ OpenERP Customer References
 """,
     'author': 'OpenERP SA',
     'depends': [
+        'crm_partner_assign',
         'website_partner',
-        'website_google_map'
+        'website_google_map',
     ],
     'demo': [
         'website_customer_demo.xml',

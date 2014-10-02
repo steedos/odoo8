@@ -32,7 +32,7 @@ instance.web.DataExport = instance.web.Dialog.extend({
         var self = this;
         var options = {
             buttons: [
-                {text: _t("Close"), click: function () { self.close(); }},
+                {text: _t("Close"), click: function () { self.$el.parents('.modal').modal('hide'); }},
                 {text: _t("Export To File"), click: function () { self.on_click_export_data(); }}
             ],
             close: function () { self.close();}
@@ -406,6 +406,7 @@ instance.web.DataExport = instance.web.Dialog.extend({
                 fields: exported_fields,
                 ids: this.ids_to_export,
                 domain: this.domain,
+                context: this.dataset.context,
                 import_compat: !!this.$el.find("#import_compat").val(),
             })},
             complete: instance.web.unblockUI,

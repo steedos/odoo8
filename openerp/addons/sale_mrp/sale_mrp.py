@@ -64,22 +64,9 @@ class mrp_production(osv.osv):
                 if parent_move_line:
                     move = move_obj.browse(cr, uid, parent_move_line)
                     if field_name == 'name':
-                        res[production.id] = move.sale_line_id and move.sale_line_id.order_id.name or False
+                        res[production.id] = move.procurement_id and move.procurement_id.sale_line_id and move.procurement_id.sale_line_id.order_id.name or False
                     if field_name == 'client_order_ref':
-                        res[production.id] = move.sale_line_id and move.sale_line_id.order_id.client_order_ref or False
-        return res
-
-    def _hook_create_post_procurement(self, cr, uid, production, procurement_id, context=None):
-        def get_parent_move(move):
-            if move.move_dest_id:
-                return get_parent_move(move.move_dest_id)
-            return move
-        
-        res =  super(mrp_production, self)._hook_create_post_procurement(cr, uid, production, procurement_id, context)
-        if production.move_prod_id:
-            parent_move_line = get_parent_move(production.move_prod_id)
-            if parent_move_line and parent_move_line.sale_line_id:
-                self.pool.get('procurement.order').write(cr, uid, procurement_id, {'sale_line_id': parent_move_line.sale_line_id.id})
+                        res[production.id] = move.procurement_id and move.procurement_id.sale_line_id and move.procurement_id.sale_line_id.order_id.client_order_ref or False
         return res
 
     _columns = {
@@ -89,9 +76,27 @@ class mrp_production(osv.osv):
 
 
 class sale_order(osv.Model):
-    _inherit ='sale.order'
+    _inherit = 'sale.order'
 
-    def _prepare_order_line_procurement(self, cr, uid, order, line, move_id, date_planned, context=None):
-        result = super(sale_order, self)._prepare_order_line_procurement(cr, uid, order, line, move_id, date_planned, context)
+    def _prepare_order_line_procurement(self, cr, uid, order, line, group_id=False, context=None):
+        result = super(sale_order, self)._prepare_order_line_procurement(cr, uid, order, line, group_id=group_id, context=context)
         result['property_ids'] = [(6, 0, [x.id for x in line.property_ids])]
         return result
+
+
+class sale_order_line(osv.osv):
+
+    _inherit = 'sale.order.line'
+    _columns = {
+        'property_ids': fields.many2many('mrp.property', 'sale_order_line_property_rel', 'order_id', 'property_id', 'Properties', readonly=True, states={'draft': [('readonly', False)]}),
+    }
+    
+
+class stock_move(osv.osv):
+    _inherit = 'stock.move'
+    
+    def _prepare_procurement_from_move(self, cr, uid, move, context=None):
+        res = super(stock_move, self)._prepare_procurement_from_move(cr, uid, move, context=context)
+        if res and move.procurement_id and move.procurement_id.property_ids:
+            res['property_ids'] = [(6, 0, [x.id for x in move.procurement_id.property_ids])]
+        return res

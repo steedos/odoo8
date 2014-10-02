@@ -3,6 +3,7 @@ import commands
 import logging
 import simplejson
 import os
+import os.path
 import io
 import base64
 import openerp
@@ -11,6 +12,8 @@ import random
 import math
 import md5
 import openerp.addons.hw_proxy.controllers.main as hw_proxy
+import pickle
+import re
 import subprocess
 import traceback
 from threading import Thread, Lock
@@ -32,7 +35,6 @@ from PIL import Image
 
 from openerp import http
 from openerp.http import request
-from openerp.addons.web.controllers.main import manifest_list, module_boot, html_template
 from openerp.tools.translate import _
 
 _logger = logging.getLogger(__name__)
@@ -45,10 +47,58 @@ class EscposDriver(Thread):
         self.lock  = Lock()
         self.status = {'status':'connecting', 'messages':[]}
 
+    def supported_devices(self):
+        if not os.path.isfile('escpos_devices.pickle'):
+            return supported_devices.device_list
+        else:
+            try:
+                f = open('escpos_devices.pickle','r')
+                return pickle.load(f)
+                f.close()
+            except Exception as e:
+                self.set_status('error',str(e))
+                return supported_devices.device_list
+
+    def add_supported_device(self,device_string):
+        r = re.compile('[0-9A-Fa-f]{4}:[0-9A-Fa-f]{4}');
+        match = r.search(device_string)
+        if match:
+            match = match.group().split(':')
+            vendor = int(match[0],16)
+            product = int(match[1],16)
+            name = device_string.split('ID')
+            if len(name) >= 2:
+                name = name[1]
+            else:
+                name = name[0]
+            _logger.info('ESC/POS: adding support for device: '+match[0]+':'+match[1]+' '+name)
+            
+            device_list = supported_devices.device_list[:]
+            if os.path.isfile('escpos_devices.pickle'):
+                try:
+                    f = open('escpos_devices.pickle','r')
+                    device_list = pickle.load(f)
+                    f.close()
+                except Exception as e:
+                    self.set_status('error',str(e))
+            device_list.append({
+                'vendor': vendor,
+                'product': product,
+                'name': name,
+            })
+
+            try:
+                f = open('escpos_devices.pickle','w+')
+                f.seek(0)
+                pickle.dump(device_list,f)
+                f.close()
+            except Exception as e:
+                self.set_status('error',str(e))
+
     def connected_usb_devices(self):
         connected = []
         
-        for device in supported_devices.device_list:
+        for device in self.supported_devices():
             if usb.core.find(idVendor=device['vendor'], idProduct=device['product']) != None:
                 connected.append(device)
         return connected
@@ -83,8 +133,9 @@ class EscposDriver(Thread):
         printer.cashdraw(5)
 
     def set_status(self, status, message = None):
+        _logger.info(status+' : '+ (message or 'no message'))
         if status == self.status['status']:
-            if message != None and message != self.status['messages'][-1]:
+            if message != None and (len(self.status['messages']) == 0 or message != self.status['messages'][-1]):
                 self.status['messages'].append(message)
         else:
             self.status['status'] = status
@@ -209,8 +260,6 @@ class EscposDriver(Thread):
             eprint.text(receipt['company']['name'] + '\n')
 
         eprint.set(align='center',type='b')
-        if check(receipt['shop']['name']):
-            eprint.text(receipt['shop']['name'] + '\n')
         if check(receipt['company']['contact_address']):
             eprint.text(receipt['company']['contact_address'] + '\n')
         if check(receipt['company']['phone']):
@@ -307,7 +356,22 @@ class EscposProxy(hw_proxy.Proxy):
         driver.push_task('receipt',receipt)
 
     @http.route('/hw_proxy/print_xml_receipt', type='json', auth='none', cors='*')
-    def print_receipt(self, receipt):
+    def print_xml_receipt(self, receipt):
         _logger.info('ESC/POS: PRINT XML RECEIPT') 
         driver.push_task('xml_receipt',receipt)
+
+    @http.route('/hw_proxy/escpos/add_supported_device', type='http', auth='none', cors='*')
+    def add_supported_device(self, device_string):
+        _logger.info('ESC/POS: ADDED NEW DEVICE:'+device_string) 
+        driver.add_supported_device(device_string)
+        return "The device:\n"+device_string+"\n has been added to the list of supported devices.<br/><a href='/hw_proxy/status'>Ok</a>"
+
+    @http.route('/hw_proxy/escpos/reset_supported_devices', type='http', auth='none', cors='*')
+    def reset_supported_devices(self):
+        try:
+            os.remove('escpos_devices.pickle')
+        except Exception as e:
+            pass
+        return 'The list of supported devices has been reset to factory defaults.<br/><a href="/hw_proxy/status">Ok</a>'
+
     

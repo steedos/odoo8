@@ -61,7 +61,16 @@ def check_ssl():
 DEFAULT_LOG_HANDLER = [':INFO']
 
 def _get_default_datadir():
-    return appdirs.user_data_dir(appname='OpenERP', appauthor=release.author)
+    home = os.path.expanduser('~')
+    if os.path.exists(home):
+        func = appdirs.user_data_dir
+    else:
+        if sys.platform in ['win32', 'darwin']:
+            func = appdirs.site_data_dir
+        else:
+            func = lambda **kwarg: "/var/lib/%s" % kwarg['appname'].lower()
+    # No "version" kwarg as session and filestore paths are shared against series
+    return func(appname=release.product_name, appauthor=release.author)
 
 class configmanager(object):
     def __init__(self, fname=None):
@@ -116,7 +125,7 @@ class configmanager(object):
         group.add_option("--load", dest="server_wide_modules", help="Comma-separated list of server-wide modules default=web")
 
         group.add_option("-D", "--data-dir", dest="data_dir", my_default=_get_default_datadir(),
-                         help="Directory where to store OpenERP data")
+                         help="Directory where to store Odoo data")
         parser.add_option_group(group)
 
         # XML-RPC / HTTP
@@ -153,7 +162,7 @@ class configmanager(object):
 
         # WEB
         group = optparse.OptionGroup(parser, "Web interface Configuration")
-        group.add_option("--db-filter", dest="dbfilter", default='.*',
+        group.add_option("--db-filter", dest="dbfilter", my_default='.*',
                          help="Filter listed database", metavar="REGEXP")
         parser.add_option_group(group)
 
@@ -227,7 +236,7 @@ class configmanager(object):
         parser.add_option_group(group)
 
         group = optparse.OptionGroup(parser, "Internationalisation options",
-            "Use these options to translate OpenERP to another language."
+            "Use these options to translate Odoo to another language."
             "See i18n section of the user manual. Option '-d' is mandatory."
             "Option '-l' is mandatory in case of importation"
             )
@@ -433,7 +442,9 @@ class configmanager(object):
 
         self.options['root_path'] = os.path.abspath(os.path.expanduser(os.path.expandvars(os.path.dirname(openerp.__file__))))
         if not self.options['addons_path'] or self.options['addons_path']=='None':
-            self.options['addons_path'] = os.path.join(self.options['root_path'], 'addons')
+            base_addons = os.path.join(self.options['root_path'], 'addons')
+            main_addons = os.path.abspath(os.path.join(self.options['root_path'], '../addons'))
+            self.options['addons_path'] = '%s,%s' % (base_addons, main_addons)
         else:
             self.options['addons_path'] = ",".join(
                     os.path.abspath(os.path.expanduser(os.path.expandvars(x)))
@@ -647,7 +658,7 @@ class configmanager(object):
 
     @property
     def session_dir(self):
-        d = os.path.join(self['data_dir'], 'sessions', release.series)
+        d = os.path.join(self['data_dir'], 'sessions')
         if not os.path.exists(d):
             os.makedirs(d, 0700)
         else:

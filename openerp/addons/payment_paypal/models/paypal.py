@@ -14,6 +14,7 @@ from openerp.addons.payment.models.payment_acquirer import ValidationError
 from openerp.addons.payment_paypal.controllers.main import PaypalController
 from openerp.osv import osv, fields
 from openerp.tools.float_utils import float_compare
+from openerp import SUPERUSER_ID
 
 _logger = logging.getLogger(__name__)
 
@@ -21,9 +22,9 @@ _logger = logging.getLogger(__name__)
 class AcquirerPaypal(osv.Model):
     _inherit = 'payment.acquirer'
 
-    def _get_paypal_urls(self, cr, uid, env, context=None):
+    def _get_paypal_urls(self, cr, uid, environment, context=None):
         """ Paypal URLS """
-        if env == 'prod':
+        if environment == 'prod':
             return {
                 'paypal_form_url': 'https://www.paypal.com/cgi-bin/webscr',
                 'paypal_rest_url': 'https://api.paypal.com/v1/oauth2/token',
@@ -42,8 +43,8 @@ class AcquirerPaypal(osv.Model):
     _columns = {
         'paypal_email_account': fields.char('Paypal Email ID', required_if_provider='paypal'),
         'paypal_seller_account': fields.char(
-            'Paypal Seller ID',
-            help='The Seller ID is used to ensure communications coming from Paypal are valid and secured.'),
+            'Paypal Merchant ID',
+            help='The Merchant ID is used to ensure communications coming from Paypal are valid and secured.'),
         'paypal_use_ipn': fields.boolean('Use IPN', help='Paypal Instant Payment Notification'),
         # Server 2 server
         'paypal_api_enabled': fields.boolean('Use Rest API'),
@@ -69,13 +70,14 @@ class AcquirerPaypal(osv.Model):
         res = cr.fetchall()
         for (company_id, company_paypal_account) in res:
             if company_paypal_account:
-                company_paypal_ids = self.search(cr, uid, [('company_id', '=', company_id), ('name', '=', 'paypal')], limit=1, context=context)
+                company_paypal_ids = self.search(cr, uid, [('company_id', '=', company_id), ('provider', '=', 'paypal')], limit=1, context=context)
                 if company_paypal_ids:
                     self.write(cr, uid, company_paypal_ids, {'paypal_email_account': company_paypal_account}, context=context)
                 else:
                     paypal_view = self.pool['ir.model.data'].get_object(cr, uid, 'payment_paypal', 'paypal_acquirer_button')
                     self.create(cr, uid, {
-                        'name': 'paypal',
+                        'name': 'Paypal',
+                        'provider': 'paypal',
                         'paypal_email_account': company_paypal_account,
                         'view_template_id': paypal_view.id,
                     }, context=context)
@@ -95,13 +97,16 @@ class AcquirerPaypal(osv.Model):
             return 0.0
         country = self.pool['res.country'].browse(cr, uid, country_id, context=context)
         if country and acquirer.company_id.country_id.id == country.id:
-            fees = amount * (1 + acquirer.fees_dom_var / 100.0) + acquirer.fees_dom_fixed - amount
+            percentage = acquirer.fees_dom_var
+            fixed = acquirer.fees_dom_fixed
         else:
-            fees = amount * (1 + acquirer.fees_int_var / 100.0) + acquirer.fees_int_fixed - amount
+            percentage = acquirer.fees_int_var
+            fixed = acquirer.fees_int_fixed
+        fees = (percentage / 100.0 * amount + fixed ) / (1 - percentage / 100.0)
         return fees
 
     def paypal_form_generate_values(self, cr, uid, id, partner_values, tx_values, context=None):
-        base_url = self.pool['ir.config_parameter'].get_param(cr, uid, 'web.base.url')
+        base_url = self.pool['ir.config_parameter'].get_param(cr, SUPERUSER_ID, 'web.base.url')
         acquirer = self.browse(cr, uid, id, context=context)
 
         paypal_tx_values = dict(tx_values)
@@ -115,6 +120,7 @@ class AcquirerPaypal(osv.Model):
             'address1': partner_values['address'],
             'city': partner_values['city'],
             'country': partner_values['country'] and partner_values['country'].name or '',
+            'state': partner_values['state'] and partner_values['state'].name or '',
             'email': partner_values['email'],
             'zip': partner_values['zip'],
             'first_name': partner_values['first_name'],
@@ -131,7 +137,7 @@ class AcquirerPaypal(osv.Model):
 
     def paypal_get_form_action_url(self, cr, uid, id, context=None):
         acquirer = self.browse(cr, uid, id, context=context)
-        return self._get_paypal_urls(cr, uid, acquirer.env, context=context)['paypal_form_url']
+        return self._get_paypal_urls(cr, uid, acquirer.environment, context=context)['paypal_form_url']
 
     def _paypal_s2s_get_access_token(self, cr, uid, ids, context=None):
         """
@@ -143,7 +149,7 @@ class AcquirerPaypal(osv.Model):
         parameters = werkzeug.url_encode({'grant_type': 'client_credentials'})
 
         for acquirer in self.browse(cr, uid, ids, context=context):
-            tx_url = self._get_paypal_urls(cr, uid, acquirer.env)['paypal_rest_url']
+            tx_url = self._get_paypal_urls(cr, uid, acquirer.environment)['paypal_rest_url']
             request = urllib2.Request(tx_url, parameters)
 
             # add other headers (https://developer.paypal.com/webapps/developer/docs/integration/direct/make-your-first-call/)
@@ -223,7 +229,7 @@ class TxPaypal(osv.Model):
         # check seller
         if data.get('receiver_email') != tx.acquirer_id.paypal_email_account:
             invalid_parameters.append(('receiver_email', data.get('receiver_email'), tx.acquirer_id.paypal_email_account))
-        if tx.acquirer_id.paypal_seller_account and data.get('receiver_id') != tx.acquirer_id.paypal_seller_account:
+        if data.get('receiver_id') and tx.acquirer_id.paypal_seller_account and data['receiver_id'] != tx.acquirer_id.paypal_seller_account:
             invalid_parameters.append(('receiver_id', data.get('receiver_id'), tx.acquirer_id.paypal_seller_account))
 
         return invalid_parameters

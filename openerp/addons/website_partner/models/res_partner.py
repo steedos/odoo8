@@ -5,21 +5,24 @@ from openerp.osv import osv, fields
 
 class WebsiteResPartner(osv.Model):
     _name = 'res.partner'
-    _inherit = ['res.partner','website.seo.metadata']
+    _inherit = ['res.partner', 'website.seo.metadata']
+
+    def _get_ids(self, cr, uid, ids, flds, args, context=None):
+        return {i: i for i in ids}
 
     _columns = {
         'website_published': fields.boolean(
-            'Publish', help="Publish on the website"),
+            'Publish', help="Publish on the website", copy=False),
         'website_description': fields.html(
             'Website Partner Full Description'
         ),
         'website_short_description': fields.text(
-            'Website artner Short Description'
+            'Website Partner Short Description'
         ),
-    }
-    _defaults = {
-        'website_published': False
+        # hack to allow using plain browse record in qweb views
+        'self': fields.function(_get_ids, type='many2one', relation=_name),
     }
 
-    def img(self, cr, uid, ids, field='image_small', context=None):
-        return "/website/image?model=%s&field=%s&id=%s" % (self._name, field, ids[0])
+    _defaults = {
+        'website_published': True
+    }

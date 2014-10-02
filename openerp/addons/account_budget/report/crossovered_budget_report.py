@@ -20,11 +20,9 @@
 ##############################################################################
 
 import time
-import datetime
-
+from openerp.osv import osv
 from openerp.report import report_sxw
-import operator
-from openerp import osv
+
 
 class budget_report(report_sxw.rml_parse):
     def __init__(self, cr, uid, name, context):
@@ -88,7 +86,7 @@ class budget_report(report_sxw.rml_parse):
                 }
                 result.append(res)
 
-                line_ids = c_b_lines_obj.search(self.cr, self.uid, [('id', 'in', budget_ids), ('analytic_account_id','=',an_ids[i][0])])
+                line_ids = c_b_lines_obj.search(self.cr, self.uid, [('id', 'in', budget_ids), ('analytic_account_id','=',an_ids[i][0]), ('date_to', '>=', d_from), ('date_from', '<=', d_to)])
                 line_id = c_b_lines_obj.browse(self.cr, self.uid, line_ids)
                 tot_theo = tot_pln = tot_prac = tot_perc = 0.00
 
@@ -191,7 +189,11 @@ class budget_report(report_sxw.rml_parse):
         result.append(res)
         return result
 
-report_sxw.report_sxw('report.crossovered.budget.report', 'crossovered.budget', 'addons/account_budget/report/crossovered_budget_report.rml',parser=budget_report,header='internal')
+
+class report_crossoveredbudget(osv.AbstractModel):
+    _name = 'report.account_budget.report_crossoveredbudget'
+    _inherit = 'report.abstract_report'
+    _template = 'account_budget.report_crossoveredbudget'
+    _wrapped_report_class = budget_report
 
 # vim:expandtab:smartindent:tabstop=4:softtabstop=4:shiftwidth=4:
-

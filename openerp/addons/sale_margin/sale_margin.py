@@ -31,11 +31,15 @@ class sale_order_line(osv.osv):
             lang=lang, update_tax=update_tax, date_order=date_order, packaging=packaging, fiscal_position=fiscal_position, flag=flag, context=context)
         if not pricelist:
             return res
+        if context is None:
+            context = {}
         frm_cur = self.pool.get('res.users').browse(cr, uid, uid).company_id.currency_id.id
         to_cur = self.pool.get('product.pricelist').browse(cr, uid, [pricelist])[0].currency_id.id
         if product:
             purchase_price = self.pool.get('product.product').browse(cr, uid, product).standard_price
-            price = self.pool.get('res.currency').compute(cr, uid, frm_cur, to_cur, purchase_price, round=False)
+            ctx = context.copy()
+            ctx['date'] = date_order
+            price = self.pool.get('res.currency').compute(cr, uid, frm_cur, to_cur, purchase_price, round=False, context=ctx)
             res['value'].update({'purchase_price': price})
         return res
 
@@ -76,7 +80,7 @@ class sale_order(osv.osv):
 
     _columns = {
         'margin': fields.function(_product_margin, string='Margin', help="It gives profitability by calculating the difference between the Unit Price and the cost price.", store={
-                'sale.order.line': (_get_order, ['margin'], 20),
+                'sale.order.line': (_get_order, ['margin', 'purchase_price'], 20),
                 'sale.order': (lambda self, cr, uid, ids, c={}: ids, ['order_line'], 20),
                 }),
     }

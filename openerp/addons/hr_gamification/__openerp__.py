@@ -23,6 +23,7 @@
     'version': '1.0',
     'author': 'OpenERP SA',
     'category': 'hidden',
+    'website': 'https://www.odoo.com/page/employees',
     'depends': ['gamification', 'hr'],
     'description': """Use the HR ressources for the gamification process.
 
@@ -35,7 +36,7 @@ Badge received are displayed on the user profile.
         'security/gamification_security.xml',
         'wizard/grant_badge.xml',
         'views/gamification.xml',
+        'views/hr_gamification.xml',
     ],
-    'js': ['static/src/js/gamification.js'],
     'auto_install': True,
 }

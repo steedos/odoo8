@@ -4,15 +4,6 @@
     var website = openerp.website;
     website.add_template_file('/website/static/src/xml/website.seo.xml');
 
-    website.EditorBar.include({
-        events: _.extend({}, website.EditorBar.prototype.events, {
-            'click a[data-action=promote-current-page]': 'launchSeo',
-        }),
-        launchSeo: function () {
-            (new website.seo.Configurator(this)).appendTo($(document.body));
-        },
-    });
-
     website.seo = {};
 
     function analyzeKeyword(htmlPage, keyword) {
@@ -95,7 +86,7 @@
                     }
                 });
             }
-            $.getJSON("http://suggest.hp.af.cm/suggest/"+encodeURIComponent(this.root + " "), addSuggestions);
+            $.getJSON("/website/seo_suggest/" + encodeURIComponent(this.root + " "), addSuggestions);
         },
     });
 
@@ -264,21 +255,21 @@
         },
         description: function () {
             var $description = $('meta[name=description]');
-            return ($description.length > 0) && ($description.attr('value') && $description.attr('value').trim());
+            return ($description.length > 0) && ($description.attr('content') && $description.attr('content').trim());
         },
         changeDescription: function (description) {
             // TODO create tag if missing
-            $('meta[name=description]').attr('value', description);
+            $('meta[name=description]').attr('content', description);
             this.trigger('description-changed', description);
         },
         keywords: function () {
             var $keywords = $('meta[name=keywords]');
-            var parsed = ($keywords.length > 0) && $keywords.attr('value') && $keywords.attr('value').split(",");
+            var parsed = ($keywords.length > 0) && $keywords.attr('content') && $keywords.attr('content').split(",");
             return (parsed && parsed[0]) ? parsed: [];
         },
         changeKeywords: function (keywords) {
             // TODO create tag if missing
-            $('meta[name=keywords]').attr('value', keywords.join(","));
+            $('meta[name=keywords]').attr('content', keywords.join(","));
             this.trigger('keywords-changed', keywords);
         },
         headers: function (tag) {
@@ -296,7 +287,7 @@
             });
         },
         company: function () {
-            return $('meta[name="openerp.company"]').attr('value');
+            return $('html').attr('data-oe-company-name');
         },
         bodyText: function () {
             return $('body').children().not('.js_seo_configuration').text();
@@ -450,7 +441,7 @@
         },
         getMainObject: function () {
             var repr = $('html').data('main-object');
-            var m = repr.match(/.+\((.+), (\d+)\)/);
+            var m = repr.match(/(.+)\((\d+),(.*)\)/);
             if (!m) {
                 return null;
             } else {
@@ -524,4 +515,11 @@
             this._super();
         },
     });
+
+    website.ready().done(function() {
+        $(document.body).on('click', 'a[data-action=promote-current-page]', function() {
+            new website.seo.Configurator(this).appendTo($(document.body));
+        });
+    });
+
 })();

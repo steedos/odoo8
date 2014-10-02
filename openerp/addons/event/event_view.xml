@@ -56,7 +56,7 @@
             <field name="name">Events</field>
             <field name="model">event.event</field>
             <field name="arch" type="xml">
-                <form string="Events" version="7.0">
+                <form string="Events">
                     <header>
                         <button string="Confirm Event" name="button_confirm" states="draft" type="object" class="oe_highlight" groups="base.group_user"/>
                         <button string="Finish Event" name="button_done" states="confirm" type="object" class="oe_highlight" groups="base.group_user"/>
@@ -65,12 +65,18 @@
                         <field name="state" widget="statusbar" statusbar_visible="draft,confirm,done"/>
                     </header>
                     <sheet>
-                        <div class="oe_right oe_button_box" groups="base.group_user">
-                            <button name="%(event.act_event_list_register_event)d" type="action" string="Registrations" help="Register with this event"/>
-                        </div>
                         <div class="oe_title">
                             <label for="name" class="oe_edit_only"/>
                             <h1><field name="name"/></h1>
+                        </div>
+                        <div class="oe_right oe_button_box" groups="base.group_user">
+                            <button name="%(event.act_event_list_register_event)d" 
+                                type="action" 
+                                class="oe_stat_button oe_inline" 
+                                icon="fa-github" 
+                                help="Register with this event">
+                                <field name="count_registrations" widget="statinfo" string="Registrations"/>
+                            </button>
                         </div>
                         <group name="main_field_group">
                             <group>
@@ -80,9 +86,10 @@
                             </group>
                             <group>
                                 <field name="user_id"/>
-                                <field name="type" on_change="onchange_event_type(type,context)" />
-                                <field name="date_begin" on_change="onchange_start_date(date_begin,date_end)"/>
+                                <field name="type"/>
+                                <field name="date_begin"/>
                                 <field name="date_end"/>
+                                <field name="date_tz" />
                             </group>
                         </group>
                         <notebook>
@@ -110,7 +117,7 @@
                                         <button name="button_reg_cancel" string="Cancel Registration" states="draft,open" type="object" icon="gtk-cancel"/>
                                     </tree>
                                     <form string="Registration">
-                                        <field name="partner_id" attrs="{'readonly':[('state','!=', 'draft')]}" on_change="onchange_partner_id(partner_id, context)" />
+                                        <field name="partner_id" attrs="{'readonly':[('state','!=', 'draft')]}"/>
                                         <field name="name"/>
                                         <group colspan="4" col="4">
                                         <field name="email"/>
@@ -263,21 +270,21 @@
             <field name="arch" type="xml">
                 <search string="Events">
                     <field name="name" string="Events"/>
-                    <filter icon="terp-mail-message-new" string="Unread Messages" name="message_unread" domain="[('message_unread','=',True)]"/>
+                    <filter string="Unread Messages" name="message_unread" domain="[('message_unread','=',True)]"/>
                     <separator/>
-                    <filter icon="terp-check" string="Unconfirmed" name="draft" domain="[('state','=','draft')]" help="Events in New state"/>
-                    <filter icon="terp-camera_test" string="Confirmed" domain="[('state','=','confirm')]" help="Confirmed events"/>
+                    <filter string="Unconfirmed" name="draft" domain="[('state','=','draft')]" help="Events in New state"/>
+                    <filter string="Confirmed" domain="[('state','=','confirm')]" help="Confirmed events"/>
                     <separator/>
-                    <filter icon="terp-personal" string="My Events" help="My Events" domain="[('user_id','=',uid)]"/>
+                    <filter string="My Events" help="My Events" domain="[('user_id','=',uid)]"/>
                     <separator/>
-                    <filter icon="terp-go-today" string="Upcoming" name="upcoming" domain="[('date_begin','&gt;=', time.strftime('%%Y-%%m-%%d 00:00:00'))]" help="Upcoming events from today" />
+                    <filter string="Upcoming" name="upcoming" domain="[('date_begin','&gt;=', time.strftime('%%Y-%%m-%%d 00:00:00'))]" help="Upcoming events from today" />
                     <field name="type"/>
                     <field name="user_id"/>
-                    <group expand="0" string="Group By...">
-                        <filter string="Responsible"  icon="terp-personal" context="{'group_by': 'user_id'}"/>
-                        <filter string="Event Type" icon="terp-crm"  context="{'group_by':'type'}"/>
-                        <filter string="Status" icon="terp-stock_effects-object-colorize" context="{'group_by':'state'}"/>
-                        <filter string="Start Month" icon="terp-go-month" domain="[]" context="{'group_by':'date_begin'}"/>
+                    <group expand="0" string="Group By">
+                        <filter string="Responsible" context="{'group_by': 'user_id'}"/>
+                        <filter string="Event Type" context="{'group_by':'type'}"/>
+                        <filter string="Status" context="{'group_by':'state'}"/>
+                        <filter string="Start Month" domain="[]" context="{'group_by':'date_begin'}"/>
                     </group>
                 </search>
             </field>
@@ -297,7 +304,7 @@
              <p class="oe_view_nocontent_create">
                Click to add a new event.
              </p><p>
-               OpenERP helps you schedule and efficiently organize your events:
+               Odoo helps you schedule and efficiently organize your events:
                track subscriptions and participations, automate the confirmation emails,
                sell tickets, etc.
              </p>
@@ -344,7 +351,7 @@
             <field name="name">event.registration.form</field>
             <field name="model">event.registration</field>
             <field name="arch" type="xml">
-                <form string="Event Registration" version="7.0">
+                <form string="Event Registration">
                     <header>
                         <button name="registration_open" string="Confirm" states="draft" type="object" class="oe_highlight"/>
                         <button name="button_reg_close" string="Attended" states="open" type="object" class="oe_highlight"/>
@@ -359,7 +366,7 @@
                         </h1>
                         <group>
                             <group>
-                                <field name="partner_id" attrs="{'readonly':[('state','!=', 'draft')]}" on_change="onchange_partner_id(partner_id, context)"/>
+                                <field name="partner_id" attrs="{'readonly':[('state','!=', 'draft')]}"/>
                                 <field name="name"/>
                                 <field name="phone"/>
                                 <label for="email"/>
@@ -420,20 +427,22 @@
             <field name="arch" type="xml">
                 <search string="Event Registration">
                     <field name="name" string="Participant" filter_domain="['|','|',('name','ilike',self),('email','ilike',self),('origin','ilike',self)]"/>
-                    <filter icon="terp-mail-message-new" string="Unread Messages" name="message_unread" domain="[('message_unread','=',True)]"/>
+                    <filter string="Unread Messages" name="message_unread" domain="[('message_unread','=',True)]"/>
                     <separator/>
-                    <filter icon="terp-check" string="New" name="draft" domain="[('state','=','draft')]" help="Registrations in unconfirmed state"/>
-                    <filter icon="terp-camera_test" string="Confirmed" domain="[('state','=','open')]" help="Confirmed registrations"/>
+                    <filter string="New" name="draft" domain="[('state','=','draft')]" help="Registrations in unconfirmed state"/>
+                    <filter string="Confirmed" domain="[('state','=','open')]" help="Confirmed registrations"/>
                     <separator/>
-                    <filter icon="terp-personal" string="My Registrations" help="My Registrations" domain="[('user_id','=',uid)]"/>
+                    <filter string="My Registrations" help="My Registrations" domain="[('user_id','=',uid)]"/>
                     <field name="event_id"/>
                     <field name="user_id"/>
                     <field name="partner_id"/>
-                    <group expand="0" string="Group By...">
-                        <filter string="Responsible"  icon="terp-personal" domain="[]" context="{'group_by':'user_id'}"/>
-                        <filter string="Partner" icon="terp-partner" domain="[]" context="{'group_by':'partner_id'}"/>
-                        <filter string="Event" icon="terp-crm" domain="[]" context="{'group_by':'event_id'}"/>
-                        <filter string="Status" icon="terp-stock_effects-object-colorize" domain="[]" context="{'group_by':'state'}"/>
+                    <group expand="0" string="Group By">
+                        <filter string="Responsible"  domain="[]" context="{'group_by':'user_id'}"/>
+                        <filter string="Partner" domain="[]" context="{'group_by':'partner_id'}"/>
+                        <filter string="Event" name="group_event" domain="[]" context="{'group_by':'event_id'}"/>
+                        <filter string="Status" domain="[]" context="{'group_by':'state'}"/>
+                        <filter string="Registration Day" domain="[]" context="{'group_by': 'create_date:day'}"/>
+                        <filter string="Registration Month" domain="[]" context="{'group_by': 'create_date:month'}"/>
                    </group>
                 </search>
             </field>

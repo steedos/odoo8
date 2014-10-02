@@ -23,18 +23,20 @@ from openerp.osv import fields, osv
 from openerp.tools.translate import _
 from openerp.addons.website.models.website import slug
 
+import pytz
+
 class event_track_tag(osv.osv):
     _name = "event.track.tag"
     _order = 'name'
     _columns = {
-        'name': fields.char('Event Track Tag')
+        'name': fields.char('Event Track Tag', translate=True)
     }
 
 class event_tag(osv.osv):
     _name = "event.tag"
     _order = 'name'
     _columns = {
-        'name': fields.char('Event Tag')
+        'name': fields.char('Event Tag', translate=True)
     }
 
 #
@@ -45,7 +47,7 @@ class event_track_stage(osv.osv):
     _name = "event.track.stage"
     _order = 'sequence'
     _columns = {
-        'name': fields.char('Track Stage'),
+        'name': fields.char('Track Stage', translate=True),
         'sequence': fields.integer('Sequence')
     }
     _defaults = {
@@ -79,12 +81,12 @@ class event_track(osv.osv):
         'stage_id': fields.many2one('event.track.stage', 'Stage'),
         'description': fields.html('Track Description', translate=True),
         'date': fields.datetime('Track Date'),
-        'duration': fields.integer('Duration'),
+        'duration': fields.float('Duration', digits=(16,2)),
         'location_id': fields.many2one('event.track.location', 'Location'),
         'event_id': fields.many2one('event.event', 'Event', required=True),
         'color': fields.integer('Color Index'),
         'priority': fields.selection([('3','Low'),('2','Medium (*)'),('1','High (**)'),('0','Highest (***)')], 'Priority', required=True),
-        'website_published': fields.boolean('Available in the website'),
+        'website_published': fields.boolean('Available in the website', copy=False),
         'website_url': fields.function(_website_url, string="Website url", type="char"),
         'image': fields.related('speaker_ids', 'image', type='binary', readonly=True)
     }
@@ -99,10 +101,11 @@ class event_track(osv.osv):
     _defaults = {
         'user_id': lambda self, cr, uid, ctx: uid,
         'website_published': lambda self, cr, uid, ctx: False,
-        'duration': lambda *args: 60,
+        'duration': lambda *args: 1.5,
         'stage_id': _default_stage_id,
         'priority': '2'
     }
+
     def _read_group_stage_ids(self, cr, uid, ids, domain, read_group_order=None, access_rights_uid=None, context=None):
         stage_obj = self.pool.get('event.track.stage')
         result = stage_obj.name_search(cr, uid, '', context=context)
@@ -117,29 +120,46 @@ class event_track(osv.osv):
 #
 class event_event(osv.osv):
     _inherit = "event.event"
+
+    def _list_tz(self,cr,uid, context=None):
+        # put POSIX 'Etc/*' entries at the end to avoid confusing users - see bug 1086728
+        return [(tz,tz) for tz in sorted(pytz.all_timezones, key=lambda tz: tz if not tz.startswith('Etc/') else '_')]
+
+    def _count_tracks(self, cr, uid, ids, field_name, arg, context=None):
+        return {
+            event.id: len(event.track_ids)
+            for event in self.browse(cr, uid, ids, context=context)
+        }
+
     def _get_tracks_tag_ids(self, cr, uid, ids, field_names, arg=None, context=None):
-        res = dict.fromkeys(ids, [])
+        res = dict((res_id, []) for res_id in ids)
         for event in self.browse(cr, uid, ids, context=context):
             for track in event.track_ids:
                 res[event.id] += [tag.id for tag in track.tag_ids]
             res[event.id] = list(set(res[event.id]))
         return res
+
     _columns = {
         'tag_ids': fields.many2many('event.tag', string='Tags'),
-        'track_ids': fields.one2many('event.track', 'event_id', 'Tracks'),
-        'sponsor_ids': fields.one2many('event.sponsor', 'event_id', 'Sponsorships'),
+        'track_ids': fields.one2many('event.track', 'event_id', 'Tracks', copy=True),
+        'sponsor_ids': fields.one2many('event.sponsor', 'event_id', 'Sponsorships', copy=True),
         'blog_id': fields.many2one('blog.blog', 'Event Blog'),
         'show_track_proposal': fields.boolean('Talks Proposals'),
         'show_tracks': fields.boolean('Multiple Tracks'),
         'show_blog': fields.boolean('News'),
+        'count_tracks': fields.function(_count_tracks, type='integer', string='Tracks'),
         'tracks_tag_ids': fields.function(_get_tracks_tag_ids, type='one2many', relation='event.track.tag', string='Tags of Tracks'),
         'allowed_track_tag_ids': fields.many2many('event.track.tag', string='Accepted Tags', help="List of available tags for track proposals."),
+        'timezone_of_event': fields.selection(_list_tz, 'Event Timezone', size=64),
     }
+
     _defaults = {
         'show_track_proposal': False,
         'show_tracks': False,
         'show_blog': False,
+        'timezone_of_event':lambda self,cr,uid,c: self.pool.get('res.users').browse(cr, uid, uid, c).tz,
     }
+
     def _get_new_menu_pages(self, cr, uid, event, context=None):
         context = context or {}
         result = super(event_event, self)._get_new_menu_pages(cr, uid, event, context=context)
@@ -160,7 +180,7 @@ class event_sponsors_type(osv.osv):
     _name = "event.sponsor.type"
     _order = "sequence"
     _columns = {
-        "name": fields.char('Sponsor Type', required=True),
+        "name": fields.char('Sponsor Type', required=True, translate=True),
         "sequence": fields.integer('Sequence')
     }
 
@@ -173,7 +193,7 @@ class event_sponsors(osv.osv):
         'partner_id': fields.many2one('res.partner', 'Sponsor/Customer', required=True),
         'url': fields.text('Sponsor Website'),
         'sequence': fields.related('sponsor_type_id', 'sequence', string='Sequence', store=True),
-        'image_medium': fields.related('partner_id', 'image_medium', string='Logo')
+        'image_medium': fields.related('partner_id', 'image_medium', string='Logo', type='binary')
     }
 
     def has_access_to_partner(self, cr, uid, ids, context=None):

@@ -8,7 +8,7 @@ from openerp.addons import decimal_precision
 class delivery_carrier(orm.Model):
     _inherit = 'delivery.carrier'
     _columns = {
-        'website_published': fields.boolean('Available in the website'),
+        'website_published': fields.boolean('Available in the website', copy=False),
         'website_description': fields.text('Description for the website'),
     }
     _defaults = {
@@ -82,10 +82,10 @@ class SaleOrder(orm.Model):
                         carrier_id = delivery_id
                         break
                 order.write({'carrier_id': carrier_id}, context=context)
-                if carrier_id:
-                    order.delivery_set(context=context)
-                else:
-                    order._delivery_unset(context=context)                    
+            if carrier_id:
+                order.delivery_set(context=context)
+            else:
+                order._delivery_unset(context=context)                    
 
         return bool(carrier_id)
 

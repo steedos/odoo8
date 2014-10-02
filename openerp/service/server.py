@@ -46,8 +46,15 @@ SLEEP_INTERVAL = 60     # 1 min
 #----------------------------------------------------------
 # Werkzeug WSGI servers patched
 #----------------------------------------------------------
+class LoggingBaseWSGIServerMixIn(object):
+    def handle_error(self, request, client_address):
+        t, e, _ = sys.exc_info()
+        if t == socket.error and e.errno == errno.EPIPE:
+            # broken pipe, ignore error
+            return
+        _logger.exception('Exception happened during processing of request from %s', client_address)
 
-class BaseWSGIServerNoBind(werkzeug.serving.BaseWSGIServer):
+class BaseWSGIServerNoBind(LoggingBaseWSGIServerMixIn, werkzeug.serving.BaseWSGIServer):
     """ werkzeug Base WSGI Server patched to skip socket binding. PreforkServer
     use this class, sets the socket and calls the process_request() manually
     """
@@ -74,7 +81,7 @@ class RequestHandler(werkzeug.serving.WSGIRequestHandler):
 # should also work with systemd socket activation. This is currently untested
 # and not yet used.
 
-class ThreadedWSGIServerReloadable(werkzeug.serving.ThreadedWSGIServer):
+class ThreadedWSGIServerReloadable(LoggingBaseWSGIServerMixIn, werkzeug.serving.ThreadedWSGIServer):
     """ werkzeug Threaded WSGI Server patched to allow reusing a listen socket
     given by the environement, this is used by autoreload to keep the listen
     socket open when a reload happens.
@@ -123,14 +130,14 @@ class AutoReload(object):
         self.handler = EventHandler(self)
         self.notifier = pyinotify.Notifier(self.wm, self.handler, timeout=0)
         mask = pyinotify.IN_MODIFY | pyinotify.IN_CREATE  # IN_MOVED_FROM, IN_MOVED_TO ?
-        for path in openerp.modules.modules.ad_paths:
+        for path in openerp.modules.module.ad_paths:
             _logger.info('Watching addons folder %s', path)
             self.wm.add_watch(path, mask, rec=True)
 
     def process_data(self, files):
         xml_files = [i for i in files if i.endswith('.xml')]
         for i in xml_files:
-            for path in openerp.modules.modules.ad_paths:
+            for path in openerp.modules.module.ad_paths:
                 if i.startswith(path):
                     # find out wich addons path the file belongs to
                     # and extract it's module name
@@ -280,7 +287,7 @@ class ThreadedServer(CommonServer):
         t.start()
         _logger.info('HTTP service (werkzeug) running on %s:%s', self.interface, self.port)
 
-    def start(self):
+    def start(self, stop=False):
         _logger.debug("Setting signal handlers")
         if os.name == 'posix':
             signal.signal(signal.SIGINT, self.signal_handler)
@@ -291,8 +298,15 @@ class ThreadedServer(CommonServer):
         elif os.name == 'nt':
             import win32api
             win32api.SetConsoleCtrlHandler(lambda sig: self.signal_handler(sig, None), 1)
-        self.cron_spawn()
-        self.http_spawn()
+
+        test_mode = config['test_enable'] or config['test_file']
+        if not stop or test_mode:
+            # some tests need the http deamon to be available...
+            self.http_spawn()
+
+        if not stop:
+            # only relevant if we are not in "--stop-after-init" mode
+            self.cron_spawn()
 
     def stop(self):
         """ Shutdown the WSGI server. Wait for non deamon threads.
@@ -329,7 +343,7 @@ class ThreadedServer(CommonServer):
         The first SIGINT or SIGTERM signal will initiate a graceful shutdown while
         a second one if any will force an immediate exit.
         """
-        self.start()
+        self.start(stop=stop)
 
         rc = preload_registries(preload)
 
@@ -456,7 +470,7 @@ class PreforkServer(CommonServer):
         cmd = nargs[0]
         cmd = os.path.join(os.path.dirname(cmd), "openerp-gevent")
         nargs[0] = cmd
-        popen = subprocess.Popen(nargs)
+        popen = subprocess.Popen([sys.executable] + nargs)
         self.long_polling_pid = popen.pid
 
     def worker_pop(self, pid):
@@ -552,8 +566,6 @@ class PreforkServer(CommonServer):
                 raise
 
     def start(self):
-        # Empty the cursor pool, we dont want them to be shared among forked workers.
-        openerp.sql_db.close_all()
         # wakeup pipe, python doesnt throw EINTR when a syscall is interrupted
         # by a signal simulating a pseudo SA_RESTART. We write to a pipe in the
         # signal handler to overcome this behaviour
@@ -601,6 +613,9 @@ class PreforkServer(CommonServer):
         if stop:
             self.stop()
             return rc
+
+        # Empty the cursor pool, we dont want them to be shared among forked workers.
+        openerp.sql_db.close_all()
 
         _logger.debug("Multiprocess starting")
         while 1:

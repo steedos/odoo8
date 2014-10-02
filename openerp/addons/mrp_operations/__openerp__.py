@@ -53,7 +53,7 @@ The field 'Working Hours' is the delay(stop date - start date).
 So, that we can compare the theoretic delay and real delay. 
     """,
     'author': 'OpenERP SA',
-    'website': 'http://www.openerp.com',
+    'website': 'https://www.odoo.com/page/manufacturing',
     'images': ['images/work_order_analysis.jpeg','images/work_order_planning.jpeg','images/work_order.jpeg'],
     'depends': ['mrp'],
     'data': [
@@ -63,7 +63,6 @@ So, that we can compare the theoretic delay and real delay.
         'mrp_operations_view.xml',
         'mrp_operations_report.xml',
         'report/mrp_workorder_analysis_view.xml',
-        'process/mrp_operation_process.xml',
         'mrp_operations_workflow_instance.xml'
     ],
     'demo': [ 

@@ -42,7 +42,7 @@ class TestAccountFollowup(TransactionCase):
                                                                             'quantity': 5, 
                                                                             'price_unit':200
                                                                                  })]})
-        self.registry('account.invoice').signal_invoice_open(cr, uid, [self.invoice_id])
+        self.registry('account.invoice').signal_workflow(cr, uid, [self.invoice_id], 'invoice_open')
         
         self.voucher = self.registry("account.voucher")
         
@@ -58,7 +58,6 @@ class TestAccountFollowup(TransactionCase):
                                                       }, context={"followup_id": self.followup_id})
         self.wizard.do_process(cr, uid, [self.wizard_id], context={"followup_id": self.followup_id})
         self.assertFalse(self.partner.browse(cr, uid, self.partner_id).latest_followup_level_id)
-        
         
     def run_wizard_three_times(self):
         cr, uid = self.cr, self.uid
@@ -113,8 +112,7 @@ class TestAccountFollowup(TransactionCase):
         partner_rec = self.partner.browse(cr, uid, self.partner_id)
         self.run_wizard_three_times()
         self.partner.action_done(cr, uid, self.partner_id)
-        self.assertEqual(partner_rec.payment_next_action, 
-                         "", "Manual action not emptied")
+        self.assertFalse(partner_rec.payment_next_action, "Manual action not emptied")
         self.assertFalse(partner_rec.payment_responsible_id)
         self.assertFalse(partner_rec.payment_next_action_date)
         
@@ -131,7 +129,7 @@ class TestAccountFollowup(TransactionCase):
         self.run_wizard_three_times()
         self.assertEqual(self.partner.browse(cr, uid, self.partner_id).latest_followup_level_id.id, 
                          self.last_followup_line_id, "Lines are not equal")
-        
+
     def test_06_pay_the_invoice(self):
         """Run wizard until manual action, pay the invoice and check that partner has no follow-up level anymore and after running the wizard the action is empty"""
         cr, uid = self.cr, self.uid
@@ -148,7 +146,6 @@ class TestAccountFollowup(TransactionCase):
                                                       'followup_id': self.followup_id
                                                       }, context={"followup_id": self.followup_id})
         self.wizard.do_process(cr, uid, [self.wizard_id], context={"followup_id": self.followup_id})
-        partner_ref = self.partner.browse(cr, uid, self.partner_id)
         self.assertEqual(0, self.partner.browse(cr, uid, self.partner_id).payment_amount_due, "Amount Due != 0")
         self.assertFalse(self.partner.browse(cr, uid, self.partner_id).payment_next_action_date, "Next action date not cleared")
         

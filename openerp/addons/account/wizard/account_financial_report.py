@@ -21,6 +21,7 @@
 
 from openerp.osv import fields, osv
 
+
 class accounting_report(osv.osv_memory):
     _name = "accounting.report"
     _inherit = "account.common.report"
@@ -29,7 +30,7 @@ class accounting_report(osv.osv_memory):
     _columns = {
         'enable_filter': fields.boolean('Enable Comparison'),
         'account_report_id': fields.many2one('account.financial.report', 'Account Reports', required=True),
-        'label_filter': fields.char('Column Label', size=32, help="This label will be displayed on report to show the balance computed for the given comparison filter."),
+        'label_filter': fields.char('Column Label', help="This label will be displayed on report to show the balance computed for the given comparison filter."),
         'fiscalyear_id_cmp': fields.many2one('account.fiscalyear', 'Fiscal Year', help='Keep empty for all open fiscal year'),
         'filter_cmp': fields.selection([('filter_no', 'No Filters'), ('filter_date', 'Date'), ('filter_period', 'Periods')], "Filter by", required=True),
         'period_from_cmp': fields.many2one('account.period', 'Start Period'),
@@ -83,16 +84,11 @@ class accounting_report(osv.osv_memory):
             if isinstance(data['form'][field], tuple):
                 data['form'][field] = data['form'][field][0]
         comparison_context = self._build_comparison_context(cr, uid, ids, data, context=context)
-        res['datas']['form']['comparison_context'] = comparison_context
+        res['data']['form']['comparison_context'] = comparison_context
         return res
 
     def _print_report(self, cr, uid, ids, data, context=None):
         data['form'].update(self.read(cr, uid, ids, ['date_from_cmp',  'debit_credit', 'date_to_cmp',  'fiscalyear_id_cmp', 'period_from_cmp', 'period_to_cmp',  'filter_cmp', 'account_report_id', 'enable_filter', 'label_filter','target_move'], context=context)[0])
-        return {
-            'type': 'ir.actions.report.xml',
-            'report_name': 'account.financial.report',
-            'datas': data,
-        }
-
+        return self.pool['report'].get_action(cr, uid, [], 'account.report_financial', data=data, context=context)
 
 # vim:expandtab:smartindent:tabstop=4:softtabstop=4:shiftwidth=4:

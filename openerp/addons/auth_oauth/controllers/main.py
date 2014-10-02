@@ -2,6 +2,7 @@ import functools
 import logging
 
 import simplejson
+import urlparse
 import werkzeug.utils
 from werkzeug.exceptions import BadRequest
 
@@ -10,6 +11,7 @@ from openerp import SUPERUSER_ID
 from openerp import http
 from openerp.http import request
 from openerp.addons.web.controllers.main import db_monodb, ensure_db, set_cookie_and_redirect, login_and_redirect
+from openerp.addons.auth_signup.controllers.main import AuthSignupHome as Home
 from openerp.modules.registry import RegistryManager
 from openerp.tools.translate import _
 
@@ -43,11 +45,12 @@ def fragment_to_query_string(func):
 #----------------------------------------------------------
 # Controller
 #----------------------------------------------------------
-class OAuthLogin(openerp.addons.web.controllers.main.Home):
+class OAuthLogin(Home):
     def list_providers(self):
         try:
             provider_obj = request.registry.get('auth.oauth.provider')
-            providers = provider_obj.search_read(request.cr, SUPERUSER_ID, [('enabled', '=', True)])
+            providers = provider_obj.search_read(request.cr, SUPERUSER_ID, [('enabled', '=', True), ('auth_endpoint', '!=', False), ('validation_endpoint', '!=', False)])
+            # TODO in forwardport: remove conditions on 'auth_endpoint' and 'validation_endpoint' when these fields will be 'required' in model
         except Exception:
             providers = []
         for provider in providers:
@@ -66,9 +69,13 @@ class OAuthLogin(openerp.addons.web.controllers.main.Home):
         return providers
 
     def get_state(self, provider):
+        redirect = request.params.get('redirect', 'web')
+        if not redirect.startswith(('//', 'http://', 'https://')):
+            redirect = '%s%s' % (request.httprequest.url_root, redirect)
         state = dict(
             d=request.session.db,
-            p=provider['id']
+            p=provider['id'],
+            r=werkzeug.url_quote_plus(redirect),
         )
         token = request.params.get('token')
         if token:
@@ -137,8 +144,11 @@ class OAuthController(http.Controller):
                 cr.commit()
                 action = state.get('a')
                 menu = state.get('m')
+                redirect = werkzeug.url_unquote_plus(state['r']) if state.get('r') else False
                 url = '/web'
-                if action:
+                if redirect:
+                    url = redirect
+                elif action:
                     url = '/web#action=%s' % action
                 elif menu:
                     url = '/web#menu_id=%s' % menu
@@ -163,7 +173,7 @@ class OAuthController(http.Controller):
 
     @http.route('/auth_oauth/oea', type='http', auth='none')
     def oea(self, **kw):
-        """login user via OpenERP Account provider"""
+        """login user via Odoo Account provider"""
         dbname = kw.pop('db', None)
         if not dbname:
             dbname = db_monodb()

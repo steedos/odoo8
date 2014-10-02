@@ -22,7 +22,7 @@
 
 {
     'name': 'Dates on Sales Order',
-    'version': '1.0',
+    'version': '1.1',
     'category': 'Sales Management',
     'description': """
 Add additional date information to the sales order.
@@ -30,17 +30,17 @@ Add additional date information to the sales order.
 
 You can add the following additional dates to a sales order:
 ------------------------------------------------------------
-    * Requested Date
+    * Requested Date (will be used as the expected date on pickings)
     * Commitment Date
     * Effective Date
 """,
     'author': 'OpenERP SA',
-    'website': 'http://www.openerp.com',
+    'website': 'https://www.odoo.com/page/crm',
     'images': ['images/sale_order_dates.jpeg'],
     'depends': ['sale_stock'],
     'data': ['sale_order_dates_view.xml'],
     'demo': [],
-    'test': [],
+    'test': ['test/requested_date.yml'],
     'installable': True,
     'auto_install': False,
 }

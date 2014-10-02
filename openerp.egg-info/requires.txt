@@ -1,26 +1,27 @@
-pychart
 babel >= 1.0
+decorator
 docutils
 feedparser
-gdata
 gevent
-psycogreen
 Jinja2
 lxml
 mako
 mock
+passlib
 pillow
 psutil
+psycogreen
 psycopg2 >= 2.2
+pychart
 pydot
 pyparsing < 2
+pypdf
 pyserial
-python-dateutil < 2
+python-dateutil
 python-ldap
 python-openid
 pytz
 pyusb >= 1.0.0b1
-pywebdav < 0.9.8
 pyyaml
 qrcode
 reportlab

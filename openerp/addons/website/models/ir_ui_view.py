@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 import copy
-import re
-import simplejson
-import werkzeug
 
 from lxml import etree, html
 
+from openerp import SUPERUSER_ID
 from openerp.addons.website.models import website
 from openerp.http import request
 from openerp.osv import osv, fields
@@ -13,36 +11,41 @@ from openerp.osv import osv, fields
 class view(osv.osv):
     _inherit = "ir.ui.view"
     _columns = {
-        'inherit_option_id': fields.many2one('ir.ui.view','Optional Inheritancy'),
-        'inherited_option_ids': fields.one2many('ir.ui.view','inherit_option_id','Optional Inheritancies'),
         'page': fields.boolean("Whether this view is a web page template (complete)"),
         'website_meta_title': fields.char("Website meta title", size=70, translate=True),
         'website_meta_description': fields.text("Website meta description", size=160, translate=True),
         'website_meta_keywords': fields.char("Website meta keywords", translate=True),
+        'customize_show': fields.boolean("Show As Optional Inherit"),
     }
     _defaults = {
         'page': False,
+        'customize_show': False,
     }
+
+
+    def _view_obj(self, cr, uid, view_id, context=None):
+        if isinstance(view_id, basestring):
+            return self.pool['ir.model.data'].xmlid_to_object(
+                cr, uid, view_id, raise_if_not_found=True, context=context
+            )
+        elif isinstance(view_id, (int, long)):
+            return self.browse(cr, uid, view_id, context=context)
+
+        # assume it's already a view object (WTF?)
+        return view_id
 
     # Returns all views (called and inherited) related to a view
     # Used by translation mechanism, SEO and optional templates
-    def _views_get(self, cr, uid, view, options=True, context=None, root=True, stack_result=None):
-        if not context:
-            context = {}
-        if not stack_result:
-            stack_result = []
+    def _views_get(self, cr, uid, view_id, options=True, context=None, root=True):
+        """ For a given view ``view_id``, should return:
 
-        def view_obj(view):
-            if isinstance(view, basestring):
-                mod_obj = self.pool.get("ir.model.data")
-                m, n = view.split('.')
-                view = mod_obj.get_object(cr, uid, m, n, context=context)
-            elif isinstance(view, (int, long)):
-                view = self.pool.get("ir.ui.view").browse(cr, uid, view, context=context)
-            return view
-
+        * the view itself
+        * all views inheriting from it, enabled or not
+          - but not the optional children of a non-enabled child
+        * all views called from it (via t-call)
+        """
         try:
-            view = view_obj(view)
+            view = self._view_obj(cr, uid, view_id, context=context)
         except ValueError:
             # Shall we log that ?
             return []
@@ -55,19 +58,24 @@ class view(osv.osv):
         node = etree.fromstring(view.arch)
         for child in node.xpath("//t[@t-call]"):
             try:
-                call_view = view_obj(child.get('t-call'))
+                called_view = self._view_obj(cr, uid, child.get('t-call'), context=context)
             except ValueError:
                 continue
-            if call_view not in result:
-                result += self._views_get(cr, uid, call_view, options=options, context=context, stack_result=result)
+            if called_view not in result:
+                result += self._views_get(cr, uid, called_view, options=options, context=context)
 
-        todo = view.inherit_children_ids
-        if options:
-            todo += filter(lambda x: not x.inherit_id, view.inherited_option_ids)
-        # Keep options in a determinitic order whatever their enabled disabled status
-        todo.sort(lambda x,y:cmp(x.id,y.id))
-        for child_view in todo:
-            for r in self._views_get(cr, uid, child_view, options=bool(child_view.inherit_id), context=context, root=False, stack_result=result):
+        extensions = view.inherit_children_ids
+        if not options:
+            # only active children
+            extensions = (v for v in view.inherit_children_ids if v.active)
+
+        # Keep options in a deterministic order regardless of their applicability
+        for extension in sorted(extensions, key=lambda v: v.id):
+            for r in self._views_get(
+                    cr, uid, extension,
+                    # only return optional grandchildren if this child is enabled
+                    options=extension.active,
+                    context=context, root=False):
                 if r not in result:
                     result.append(r)
         return result
@@ -123,25 +131,27 @@ class view(osv.osv):
         return arch
 
     def render(self, cr, uid, id_or_xml_id, values=None, engine='ir.qweb', context=None):
-        if getattr(request, 'website_enabled', False):
+        if request and getattr(request, 'website_enabled', False):
             engine='website.qweb'
 
             if isinstance(id_or_xml_id, list):
                 id_or_xml_id = id_or_xml_id[0]
-            if isinstance(id_or_xml_id, (int, long)):
-                id_or_xml_id = self.get_view_xmlid(cr, uid, id_or_xml_id)
 
             if not context:
                 context = {}
 
-            qcontext = dict(editable=False)
-            qcontext.update(
+            company = self.pool['res.company'].browse(cr, SUPERUSER_ID, request.website.company_id.id, context=context)
+
+            qcontext = dict(
                 context.copy(),
                 website=request.website,
                 url_for=website.url_for,
                 slug=website.slug,
-                res_company=request.website.company_id,
+                res_company=company,
                 user_id=self.pool.get("res.users").browse(cr, uid, uid),
+                translatable=context.get('lang') != request.website.default_lang_code,
+                editable=request.website.is_publisher(),
+                menu_data=self.pool['ir.ui.menu'].load_menus_root(cr, uid, context=context) if request.website.is_user() else None,
             )
 
             # add some values
@@ -149,7 +159,10 @@ class view(osv.osv):
                 qcontext.update(values)
 
             # in edit mode ir.ui.view will tag nodes
-            context['inherit_branding'] = qcontext.get('editable', False)
+            if qcontext.get('editable'):
+                context = dict(context, inherit_branding=True)
+            elif request.registry['res.users'].has_group(cr, uid, 'base.group_website_publisher'):
+                context = dict(context, inherit_branding_auto=True)
 
             view_obj = request.website.get_template(id_or_xml_id)
             if 'main_object' not in qcontext:
@@ -198,3 +211,8 @@ class view(osv.osv):
         self.write(cr, uid, res_id, {
             'arch': self._pretty_arch(arch)
         }, context=context)
+
+        view = self.browse(cr, SUPERUSER_ID, res_id, context=context)
+        if view.model_data_id:
+            view.model_data_id.write({'noupdate': True})
+

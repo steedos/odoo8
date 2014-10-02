@@ -35,11 +35,13 @@ class gamification_badge_user(osv.Model):
     _name = 'gamification.badge.user'
     _description = 'Gamification user badge'
     _order = "create_date desc"
+    _rec_name = "badge_name"
 
     _columns = {
         'user_id': fields.many2one('res.users', string="User", required=True),
         'sender_id': fields.many2one('res.users', string="Sender", help="The user who has send the badge"),
-        'badge_id': fields.many2one('gamification.badge', string='Badge', required=True),
+        'badge_id': fields.many2one('gamification.badge', string='Badge', required=True, ondelete="cascade"),
+        'challenge_id': fields.many2one('gamification.challenge', string='Challenge originating', help="If this badge was rewarded through a challenge"),
         'comment': fields.text('Comment'),
         'badge_name': fields.related('badge_id', 'name', type="char", string="Badge Name"),
         'create_date': fields.datetime('Created', readonly=True),
@@ -61,7 +63,12 @@ class gamification_badge_user(osv.Model):
         template_id = self.pool['ir.model.data'].get_object(cr, uid, 'gamification', 'email_template_badge_received', context)
         for badge_user in self.browse(cr, uid, ids, context=context):
             body_html = temp_obj.render_template(cr, uid, template_id.body_html, 'gamification.badge.user', badge_user.id, context=context)
-            res = user_obj.message_post(cr, uid, badge_user.user_id.id, body=body_html, context=context)
+            res = user_obj.message_post(
+                cr, uid, badge_user.user_id.id,
+                body=body_html,
+                subtype='gamification.mt_badge_granted',
+                partner_ids=[badge_user.user_id.partner_id.id],
+                context=context)
         return res
 
     def create(self, cr, uid, vals, context=None):
@@ -88,13 +95,21 @@ class gamification_badge(osv.Model):
             the total number of time this badge was granted
             the total number of users this badge was granted to
         """
-        result = dict.fromkeys(ids, False)
-        for obj in self.browse(cr, uid, ids, context=context):
-            res = list(set(owner.user_id.id for owner in obj.owner_ids))
-            result[obj.id] = {
-                'unique_owner_ids': res,
-                'stat_count': len(obj.owner_ids),
-                'stat_count_distinct': len(res)
+        result = dict((res_id, {'stat_count': 0, 'stat_count_distinct': 0, 'unique_owner_ids': []}) for res_id in ids)
+
+        cr.execute("""
+            SELECT badge_id, count(user_id) as stat_count,
+                count(distinct(user_id)) as stat_count_distinct,
+                array_agg(distinct(user_id)) as unique_owner_ids
+            FROM gamification_badge_user
+            WHERE badge_id in %s
+            GROUP BY badge_id
+            """, (tuple(ids),))
+        for (badge_id, stat_count, stat_count_distinct, unique_owner_ids) in cr.fetchall():
+            result[badge_id] = {
+                'stat_count': stat_count,
+                'stat_count_distinct': stat_count_distinct,
+                'unique_owner_ids': unique_owner_ids,
             }
         return result
 
@@ -148,7 +163,7 @@ class gamification_badge(osv.Model):
             string='Authorized Users',
             help="Only these people can give this badge"),
         'rule_auth_badge_ids': fields.many2many('gamification.badge',
-            'rel_badge_badge', 'badge1_id', 'badge2_id',
+            'gamification_badge_rule_badge_rel', 'badge1_id', 'badge2_id',
             string='Required Badges',
             help="Only the people having these badges can give this badge"),
 
@@ -263,7 +278,7 @@ class gamification_badge(osv.Model):
 
     def check_progress(self, cr, uid, context=None):
         try:
-            model, res_id = template_id = self.pool.get('ir.model.data').get_object_reference(cr, uid, 'gamification', 'badge_hidden')
+            model, res_id = self.pool.get('ir.model.data').get_object_reference(cr, uid, 'gamification', 'badge_hidden')
         except ValueError:
             return True
         badge_user_obj = self.pool.get('gamification.badge.user')

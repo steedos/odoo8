@@ -25,6 +25,20 @@
     +box-shadow(none)
     -ms-filter: "alpha(opacity=50)"
 
+#cke_1_top
+    padding: 0
+
+#cke_wrapwrap
+    -moz-box-shadow: none
+    -webkit-box-shadow: none
+    box-shadow: none
+    .cke_button
+        padding-top: 5px
+        padding-bottom: 5px
+    .cke_combo_button
+        padding-top: 1px
+        padding-bottom: 1px
+
 // }}}
  
 /* ---- OpenERP Style ---- {{{ */
@@ -77,11 +91,36 @@
 .cke_editable .css_editable_mode_hidden
     display: none
 
+.cke_editable .css_editable_mode_display
+    display: block !important
+
 .oe_structure.oe_empty:empty, [data-oe-type=html]:empty, .oe_structure.oe_empty > .oe_drop_zone.oe_insert:only-child, [data-oe-type=html] > .oe_drop_zone.oe_insert:only-child
     background-image: url('/website/static/src/img/edit_here.png') !important
 
 .oe_structure.oe_empty:empty:before, [data-oe-type=html]:empty:before, .oe_structure.oe_empty > .oe_drop_zone.oe_insert:only-child:before, [data-oe-type=html] > .oe_drop_zone.oe_insert:only-child:before
     content: 'Press The Top-Left Edit Button' !important
+
+[data-oe-type=html].oe_no_empty:empty:before
+    content: '' !important
+
+[data-oe-type=html].oe_no_empty:empty
+    background-image: none !important
+    height: 16px !important
+
+#website-top-edit
+    width: 100%
+    > ul > li
+        margin: 0
+
+#website-top-navbar
+    min-height: 34px
+    height: 34px
+    form
+        margin: 0
+        button, a
+            padding: 4px 8px 4px 8px
+            margin-top: 2px
+            font-size: 13px
 
 // }}}
 
@@ -94,6 +133,19 @@ table.editorbar-panel
         border: 1px solid #aaa
     td.selected
         background-color: #b1c9d9
+
+.link-style
+    .dropdown > .btn
+        min-width: 160px
+    .link-style
+        display: none
+    li
+        text-align: center
+        label
+            width: 100px
+            margin: 0 5px
+    .col-sm-2 > *
+        line-height: 2em
 
 // }}}
 
@@ -150,7 +202,7 @@ ul.oe_menu_editor
     +user-select(auto)
     cursor: text !important
 
-.modal-dialog.select-image
+.modal-dialog.select-media
     width: 80%
 
 .modal .existing-attachments
@@ -179,7 +231,7 @@ ul.oe_menu_editor
 .modal
     .font-icons-icons
         font-size: 2em
-        max-height: 6em
+        max-height: 9em
         overflow: auto
 
         .font-icons-icon
@@ -232,6 +284,10 @@ $attachment-border-color: #848490
             border-top: none
             border-left: none
             +border-bottom-right-radius(8px)
+        &.media_selected
+            > i, > img 
+                border-width: 5px
+                border-color: rgb(0, 248, 248)
 
 // wrapper positioned relatively for drag&drop widget which is disabled below.
 // Breaks completely horribly crazy products listing page, so take it out.
@@ -259,16 +315,29 @@ $attachment-border-color: #848490
     outline: 1px solid red !important
     background-color: #ffd9dd !important
 
-.hover-edition-button
+.hover-edition
+    display: inline-block
     position: absolute
     top: 0
     left: 0
-    // This z-index is due to .navbar of bootstrap
-    z-index: 1000
+    // This z-index is due to .navbar of bootstrap & jQuery-transfo
+    z-index: 1001
+.preview-container
+    text-align: center
+    line-height: 100px
+    height: 100px
+    > *
+        max-height: 100px
+        line-height: 100px
+        margin: 0 auto
+        display: inline-block
 
 // fontawesome
 .cke_editable .fa
     cursor: pointer
+
+.img-responsive
+    text-align: center
 
 // }}}
 
@@ -381,20 +450,22 @@ $highlighted_text_color: #ffffff
 /* ---- ACE EDITOR ---- {{{ */
 
 $editorbar_height: 30px
+$infobar_height: 20px
 // TODO Fix => might break with themes
 
 .oe_ace_view_editor
     position: fixed
     // top property is set programmatically
     right: 0
-    z-index: 1000
+    z-index: 1001
     height: 100%
+    background: #2F3129
+    color: white
     .oe_ace_view_editor_title
         width: 100%
         padding-top: 0
         padding-left: 0
         height: $editorbar_height
-        background: #2F3129
         .oe_view_list
             width: 50%
             height: $editorbar_height
@@ -405,28 +476,19 @@ $editorbar_height: 30px
             @include editor-font
     .ace_editor
         position: absolute
-        top: $editorbar_height
+        top: $editorbar_height + $infobar_height
         right: 0
         // bottom property is set programmatically
         left: 0
         .ace_gutter
             cursor: ew-resize
+    #ace-view-id
+        padding: 0 1em
     &.oe_ace_open
         +opacity(0.97)
     &.oe_ace_closed
         z-index: -1000
         +opacity(0)
-
-// }}}
-
-/* ---- EDITOR TOUR ---- {{{ */
-
-div.tour-backdrop
-    z-index: 2009
-.popover.tour
-    z-index: 2010
-.popover.fixed
-    position: fixed
 
 // }}}
 

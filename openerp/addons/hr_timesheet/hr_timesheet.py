@@ -24,6 +24,7 @@ import time
 from openerp.osv import fields
 from openerp.osv import osv
 from openerp.tools.translate import _
+import openerp
 
 class hr_employee(osv.osv):
     _name = "hr.employee"
@@ -147,7 +148,9 @@ class hr_analytic_timesheet(osv.osv):
         else:
             emp_id = emp_obj.search(cr, uid, [('user_id','=',context.get('user_id') or uid)], limit=1, context=context)
         if not emp_id:
-            raise osv.except_osv(_('Warning!'), _('Please create an employee for this user, using the menu: Human Resources > Employees.'))
+            model, action_id = self.pool['ir.model.data'].get_object_reference(cr, uid, 'hr', 'open_view_employee_list_my')
+            msg = _("Employee is not created for this user. Please create one from configuration panel.")
+            raise openerp.exceptions.RedirectWarning(msg, action_id, _('Go to the configuration panel'))
         emp = emp_obj.browse(cr, uid, emp_id[0], context=context)
         if emp.journal_id:
             return emp.journal_id.id
@@ -170,7 +173,7 @@ class hr_analytic_timesheet(osv.osv):
         if ids:
             new_date = self.read(cr, uid, ids[0], ['date'])['date']
             if date != new_date:
-                warning = {'title':'User Alert!','message':'Changing the date will let this entry appear in the timesheet of the new date.'}
+                warning = {'title':_('User Alert!'),'message':_('Changing the date will let this entry appear in the timesheet of the new date.')}
                 return {'value':{},'warning':warning}
         return {'value':{}}
 

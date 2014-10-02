@@ -24,7 +24,7 @@
             <field name="name">Event Locations</field>
             <field name="model">event.track.location</field>
             <field name="arch" type="xml">
-                <form string="Event Location" version="7.0">
+                <form string="Event Location">
                     <field name="name"/>
                 </form>
             </field>
@@ -51,7 +51,7 @@
             <field name="name">Event Stages</field>
             <field name="model">event.track.stage</field>
             <field name="arch" type="xml">
-                <form string="Event Stage" version="7.0">
+                <form string="Event Stage">
                     <field name="name"/>
                 </form>
             </field>
@@ -79,7 +79,7 @@
             <field name="name">Sponsor Types</field>
             <field name="model">event.sponsor.type</field>
             <field name="arch" type="xml">
-                <form string="Event Sponsor Types" version="7.0">
+                <form string="Event Sponsor Types">
                     <field name="sequence" widget="handle"/>
                     <field name="name"/>
                 </form>
@@ -106,7 +106,7 @@
             <field name="name">Track Tags</field>
             <field name="model">event.track.tag</field>
             <field name="arch" type="xml">
-                <form string="Event Track Tag" version="7.0">
+                <form string="Event Track Tag">
                     <field name="name"/>
                 </form>
             </field>
@@ -132,7 +132,7 @@
             <field name="name">Event Tags</field>
             <field name="model">event.tag</field>
             <field name="arch" type="xml">
-                <form string="Event Tag" version="7.0">
+                <form string="Event Tag">
                     <field name="name"/>
                 </form>
             </field>
@@ -160,7 +160,15 @@
             <field name="model">event.event</field>
             <field name="arch" type="xml">
                 <xpath expr="//div[@class='oe_right oe_button_box']" position="inside">
-                    <button name="%(website_event_track.act_event_list_tracks)d" type="action" string="Tracks"/>
+                    <button name="%(website_event_track.act_event_list_tracks)d" 
+                        type="action" 
+                        class="oe_stat_button oe_inline" 
+                        icon="fa-inbox">
+                        <field name="count_tracks" widget="statinfo"/>
+                    </button>
+                </xpath>
+                <xpath expr="//field[@name='organizer_id']" position="after">
+                    <field name="timezone_of_event" />
                 </xpath>
                 <xpath expr="//div[@class='oe_title']" position="inside">
                     <label for="tag_ids" class="oe_edit_only"/>
@@ -226,7 +234,7 @@
                                 <div class="oe_kanban_content">
                                     <h4><field name="name"/></h4>
                                     <field name="tag_ids"/>
-                                    <div t-if="duration"><field name="duration"/> hours</div>
+                                    <div t-if="duration"><field name="duration" widget="float_time"/> hours</div>
                                     <span class="oe_right">
                                         <t t-set="priority" t-value="record.priority.raw_value || 0"/>
                                         <a type="object" name="set_priority" args="['2']" t-if="priority == 3" title="Normal Priority">
@@ -258,7 +266,7 @@
             <field name="model">event.track</field>
             <field eval="2" name="priority"/>
             <field name="arch" type="xml">
-                <calendar color="color" date_start="date" date_delay="duration" string="Event Tracks">
+                <calendar color="location_id" date_start="date" date_delay="duration" string="Event Tracks">
                     <field name="name"/>
                     <field name="event_id"/>
                 </calendar>
@@ -273,7 +281,7 @@
                     <field name="event_id"/>
                     <field name="stage_id"/>
                     <field name="speaker_ids"/>
-                    <group expand="0" string="Group By...">
+                    <group expand="0" string="Group By">
                         <filter string="Responsible"  context="{'group_by': 'user_id'}"/>
                         <filter string="Stage" context="{'group_by':'stage_id'}"/>
                         <filter string="Date" context="{'group_by':'date'}"/>
@@ -287,7 +295,7 @@
             <field name="name">event.track.form</field>
             <field name="model">event.track</field>
             <field name="arch" type="xml">
-                <form string="Event Track" version="7.0">
+                <form string="Event Track">
                     <header>
                         <field name="stage_id" widget="statusbar"/>
                     </header>
@@ -316,13 +324,12 @@
                                 <field name="date"/>
                                 <label for="duration"/>
                                 <div>
-                                    <field name="duration" class="oe_inline"/> minutes
+                                    <field name="duration" class="oe_inline" widget="float_time"/> hours
                                 </div>
                                 <field name="tag_ids" widget="many2many_tags"/>
+                                <field name="color"/>
                             </group>
                         </group>
-                        <label for="description" class="oe_edit_only"/>
-                        <field name="description"/>
                     </sheet>
                     <div class="oe_chatter">
                         <field name="message_follower_ids" widget="mail_followers"/>
@@ -357,6 +364,7 @@
         <record model="ir.actions.act_window" id="action_event_track">
             <field name="name">Event Tracks</field>
             <field name="res_model">event.track</field>
+            <field name="view_mode">tree,form,calendar</field>
         </record>
         <menuitem name="Event Tracks" id="menu_event_track" action="action_event_track" parent="event.event_configuration" groups="base.group_no_one"/>
 

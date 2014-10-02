@@ -20,8 +20,10 @@
 ##############################################################################
 
 from openerp.osv import fields, osv
+from openerp import api
 from openerp import SUPERUSER_ID
 from openerp.tools.translate import _
+import openerp
 
 
 class res_users(osv.Model):
@@ -38,7 +40,7 @@ class res_users(osv.Model):
     _columns = {
         'alias_id': fields.many2one('mail.alias', 'Alias', ondelete="restrict", required=True,
             help="Email address internally associated with this user. Incoming "\
-                 "emails will appear in the user's notifications."),
+                 "emails will appear in the user's notifications.", copy=False, auto_join=True),
         'display_groups_suggestions': fields.boolean("Display Groups Suggestions"),
     }
 
@@ -54,10 +56,10 @@ class res_users(osv.Model):
         init_res = super(res_users, self).__init__(pool, cr)
         # duplicate list to avoid modifying the original reference
         self.SELF_WRITEABLE_FIELDS = list(self.SELF_WRITEABLE_FIELDS)
-        self.SELF_WRITEABLE_FIELDS.extend(['notification_email_send', 'display_groups_suggestions'])
+        self.SELF_WRITEABLE_FIELDS.extend(['notify_email', 'display_groups_suggestions'])
         # duplicate list to avoid modifying the original reference
         self.SELF_READABLE_FIELDS = list(self.SELF_READABLE_FIELDS)
-        self.SELF_READABLE_FIELDS.extend(['notification_email_send', 'alias_domain', 'alias_name', 'display_groups_suggestions'])
+        self.SELF_READABLE_FIELDS.extend(['notify_email', 'alias_domain', 'alias_name', 'display_groups_suggestions'])
         return init_res
 
     def _auto_init(self, cr, context=None):
@@ -68,7 +70,9 @@ class res_users(osv.Model):
 
     def create(self, cr, uid, data, context=None):
         if not data.get('login', False):
-            raise osv.except_osv(_('Invalid Action!'), _('You may not create a user. To create new users, you should use the "Settings > Users" menu.'))
+            model, action_id = self.pool['ir.model.data'].get_object_reference(cr, uid, 'base', 'action_res_users')
+            msg = _("You cannot create a new user from here.\n To create new user please go to configuration panel.")
+            raise openerp.exceptions.RedirectWarning(msg, action_id, _('Go to the configuration panel'))
         if context is None:
             context = {}
 
@@ -112,18 +116,29 @@ class res_users(osv.Model):
             thread_id = thread_id[0]
         return self.browse(cr, SUPERUSER_ID, thread_id).partner_id.id
 
+    @api.cr_uid_ids_context
     def message_post(self, cr, uid, thread_id, context=None, **kwargs):
-        """ Redirect the posting of message on res.users to the related partner.
+        """ Redirect the posting of message on res.users as a private discussion.
             This is done because when giving the context of Chatter on the
             various mailboxes, we do not have access to the current partner_id. """
         if isinstance(thread_id, (list, tuple)):
             thread_id = thread_id[0]
+        current_pids = []
         partner_ids = kwargs.get('partner_ids', [])
-        partner_id = self._message_post_get_pid(cr, uid, thread_id, context=context)
-        if partner_id not in [command[1] for command in partner_ids]:
-            partner_ids.append(partner_id)
+        user_pid = self._message_post_get_pid(cr, uid, thread_id, context=context)
+        for partner_id in partner_ids:
+            if isinstance(partner_id, (list, tuple)) and partner_id[0] == 4 and len(partner_id) == 2:
+                current_pids.append(partner_id[1])
+            elif isinstance(partner_id, (list, tuple)) and partner_id[0] == 6 and len(partner_id) == 3:
+                current_pids.append(partner_id[2])
+            elif isinstance(partner_id, (int, long)):
+                current_pids.append(partner_id)
+        if user_pid not in current_pids:
+            partner_ids.append(user_pid)
         kwargs['partner_ids'] = partner_ids
-        return self.pool.get('mail.thread').message_post(cr, uid, False, **kwargs)
+        if context and context.get('thread_model') == 'res.partner':
+            return self.pool['res.partner'].message_post(cr, uid, user_pid, **kwargs)
+        return self.pool['mail.thread'].message_post(cr, uid, uid, **kwargs)
 
     def message_update(self, cr, uid, ids, msg_dict, update_vals=None, context=None):
         return True
@@ -135,7 +150,7 @@ class res_users(osv.Model):
         return self.pool.get('mail.thread').message_get_partner_info_from_emails(cr, uid, emails, link_mail=link_mail, context=context)
 
     def message_get_suggested_recipients(self, cr, uid, ids, context=None):
-        return dict.fromkeys(ids, list())
+        return dict((res_id, list()) for res_id in ids)
 
     def stop_showing_groups_suggestions(self, cr, uid, user_id, context=None):
         """Update display_groups_suggestions value to False"""

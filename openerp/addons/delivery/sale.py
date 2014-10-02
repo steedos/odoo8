@@ -74,7 +74,7 @@ class sale_order(osv.Model):
             if not grid_id:
                 raise osv.except_osv(_('No Grid Available!'), _('No grid matching for this carrier!'))
 
-            if order.state != 'draft':
+            if order.state not in ('draft', 'sent'):
                 raise osv.except_osv(_('Order not in Draft State!'), _('The order state have to be draft to add delivery lines.'))
 
             grid = grid_obj.browse(cr, uid, grid_id, context=context)
@@ -91,6 +91,5 @@ class sale_order(osv.Model):
                 'product_id': grid.carrier_id.product_id.id,
                 'price_unit': grid_obj.get_price(cr, uid, grid.id, order, time.strftime('%Y-%m-%d'), context),
                 'tax_id': [(6, 0, taxes_ids)],
-                'type': 'make_to_stock',
                 'is_delivery': True
             })

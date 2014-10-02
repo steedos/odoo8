@@ -44,17 +44,6 @@ class mrp_config_settings(osv.osv_memory):
                  'Without this module: A + B + C -> D.\n'
                  'With this module: A + B + C -> D + E.\n'
                  '-This installs the module mrp_byproduct.'),
-        'module_mrp_jit': fields.boolean("Generate procurement in real time",
-            help='This allows Just In Time computation of procurement orders.\n'
-                 'All procurement orders will be processed immediately, which could in some '
-                 'cases entail a small performance impact.\n'
-                 '-This installs the module mrp_jit.'),
-        'module_stock_no_autopicking': fields.boolean("Manage manual picking to fulfill manufacturing orders ",
-            help='This module allows an intermediate picking process to provide raw materials to production orders.\n'
-                 'For example to manage production made by your suppliers (sub-contracting).\n'
-                 'To achieve this, set the assembled product which is sub-contracted to "No Auto-Picking" '
-                 'and put the location of the supplier in the routing of the assembly operation.\n'
-                 '-This installs the module stock_no_autopicking.'),
         'group_mrp_routings': fields.boolean("Manage routings and work orders ",
             implied_group='mrp.group_mrp_routings',
             help='Routings allow you to create and manage the manufacturing operations that should be followed '
@@ -63,6 +52,7 @@ class mrp_config_settings(osv.osv_memory):
         'group_mrp_properties': fields.boolean("Allow several bill of materials per products using properties",
             implied_group='product.group_mrp_properties',
             help="""The selection of the right Bill of Material to use will depend on the properties specified on the sales order and the Bill of Material."""),
+        #FIXME: Should be removed as module product_manufacturer has been removed
         'module_product_manufacturer': fields.boolean("Define manufacturers on products ",
             help='This allows you to define the following for a product:\n'
                  '* Manufacturer\n'

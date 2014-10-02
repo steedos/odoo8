@@ -24,6 +24,7 @@
     'name': 'Events Sales',
     'version': '0.1',
     'category': 'Tools',
+    'website' : 'https://www.odoo.com/page/events',
     'description': """
 Creating registration with sale orders.
 =======================================
@@ -42,6 +43,9 @@ this event.
     'data': [
         'event_sale_view.xml',
         'event_sale_data.xml',
+        'event_sale_report.xml',
+        'views/report_registrationbadge.xml',
+        'security/ir.model.access.csv',
     ],
     'demo': ['event_demo.xml'],
     'test': ['test/confirm.yml'],

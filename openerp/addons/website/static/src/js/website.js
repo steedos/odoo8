@@ -4,6 +4,8 @@
     var website = {};
     openerp.website = website;
 
+    website.translatable = !!$('html').data('translatable');
+
     /* ----------------------------------------------------
        Helpers
        ---------------------------------------------------- */ 
@@ -243,16 +245,31 @@
             return def;
         });
     };
+
     website.add_template_file('/website/static/src/xml/website.xml');
 
     website.dom_ready = $.Deferred();
     $(document).ready(function () {
-        website.is_editable = website.is_editable || $('html').data('editable');
-        website.is_editable_button= website.is_editable_button || $('html').data('editable');
         website.dom_ready.resolve();
         // fix for ie
         if($.fn.placeholder) $('input, textarea').placeholder();
     });
+
+    /**
+     * Execute a function if the dom contains at least one element matched
+     * through the given jQuery selector. Will first wait for the dom to be ready.
+     *
+     * @param {String} selector A jQuery selector used to match the element(s)
+     * @param {Function} fn Callback to execute if at least one element has been matched
+     */
+    website.if_dom_contains = function(selector, fn) {
+        website.dom_ready.then(function () {
+            var elems = $(selector);
+            if (elems.length) {
+                fn(elems);
+            }
+        });
+    };
 
     var all_ready = null;
     /**
@@ -264,7 +281,15 @@
             all_ready = website.dom_ready.then(function () {
                 return templates_def;
             }).then(function () {
-                if (website.is_editable) {
+                // display button if they are at least one editable zone in the page (check the branding)
+                if (!!$('[data-oe-model]').size()) {
+                    $("#oe_editzone").show();
+
+                    //backwards compatibility with 8.0RC1 templates - Drop next line in master!
+                    $("#oe_editzone button").show();
+                }
+
+                if ($('html').data('website-id')) {
                     website.id = $('html').data('website-id');
                     website.session = new openerp.Session();
                     var modules = ['website'];
@@ -277,7 +302,7 @@
 
     website.inject_tour = function() {
         // if a tour is active inject tour js
-    }
+    };
 
     website.dom_ready.then(function () {
         /* ----- PUBLISHING STUFF ---- */
@@ -303,6 +328,14 @@
                 window.document.body.scrollTop = +location.hash.match(/scrollTop=([0-9]+)/)[1];
             }
         },0);
+
+        /* ----- WEBSITE TOP BAR ---- */
+        var $collapse = $('#oe_applications ul.dropdown-menu').clone()
+                .attr("id", "oe_applications_collapse")
+                .attr("class", "nav navbar-nav navbar-left navbar-collapse collapse");
+        $('#oe_applications').before($collapse);
+        $collapse.wrap('<div class="visible-xs"/>');
+        $('[data-target="#oe_applications"]').attr("data-target", "#oe_applications_collapse");
     });
 
     return website;

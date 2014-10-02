@@ -21,8 +21,9 @@
 
 import time
 from collections import defaultdict
-
+from openerp.osv import osv
 from openerp.report import report_sxw
+
 
 class report_rappel(report_sxw.rml_parse):
     _name = "account_followup.report.rappel"
@@ -71,12 +72,10 @@ class report_rappel(report_sxw.rml_parse):
             }
             lines_per_currency[currency].append(line_data)
 
-        return [{'line': lines} for lines in lines_per_currency.values()]
+        return [{'line': lines, 'currency': currency} for currency, lines in lines_per_currency.items()]
 
     def _get_text(self, stat_line, followup_id, context=None):
-        if context is None:
-            context = {}
-        context.update({'lang': stat_line.partner_id.lang})
+        context = dict(context or {}, lang=stat_line.partner_id.lang)
         fp_obj = self.pool['account_followup.followup']
         fp_line = fp_obj.browse(self.cr, self.uid, followup_id, context=context).followup_line
         if not fp_line:
@@ -108,8 +107,11 @@ class report_rappel(report_sxw.rml_parse):
             }
         return text
 
-report_sxw.report_sxw('report.account_followup.followup.print',
-        'account_followup.stat.by.partner', 'addons/account_followup/report/account_followup_print.rml',
-        parser=report_rappel)
+
+class report_followup(osv.AbstractModel):
+    _name = 'report.account_followup.report_followup'
+    _inherit = 'report.abstract_report'
+    _template = 'account_followup.report_followup'
+    _wrapped_report_class = report_rappel
 
 # vim:expandtab:smartindent:tabstop=4:softtabstop=4:shiftwidth=4:

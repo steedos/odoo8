@@ -22,7 +22,7 @@ _logger = logging.getLogger(__name__)
 class PaymentAcquirerOgone(osv.Model):
     _inherit = 'payment.acquirer'
 
-    def _get_ogone_urls(self, cr, uid, env, context=None):
+    def _get_ogone_urls(self, cr, uid, environment, context=None):
         """ Ogone URLS:
 
          - standard order: POST address for form-based
@@ -30,10 +30,10 @@ class PaymentAcquirerOgone(osv.Model):
         @TDETODO: complete me
         """
         return {
-            'ogone_standard_order_url': 'https://secure.ogone.com/ncol/%s/orderstandard_utf8.asp' % (env,),
-            'ogone_direct_order_url': 'https://secure.ogone.com/ncol/%s/orderdirect_utf8.asp' % (env,),
-            'ogone_direct_query_url': 'https://secure.ogone.com/ncol/%s/querydirect_utf8.asp' % (env,),
-            'ogone_afu_agree_url': 'https://secure.ogone.com/ncol/%s/AFU_agree.asp' % (env,),
+            'ogone_standard_order_url': 'https://secure.ogone.com/ncol/%s/orderstandard_utf8.asp' % (environment,),
+            'ogone_direct_order_url': 'https://secure.ogone.com/ncol/%s/orderdirect_utf8.asp' % (environment,),
+            'ogone_direct_query_url': 'https://secure.ogone.com/ncol/%s/querydirect_utf8.asp' % (environment,),
+            'ogone_afu_agree_url': 'https://secure.ogone.com/ncol/%s/AFU_agree.asp' % (environment,),
         }
 
     def _get_providers(self, cr, uid, context=None):
@@ -69,7 +69,66 @@ class PaymentAcquirerOgone(osv.Model):
             if inout == 'in':
                 return True
             else:
-                keys = "ORDERID CURRENCY AMOUNT PM ACCEPTANCE STATUS CARDNO ALIAS ED CN TRXDATE PAYID NCERROR BRAND ECI IP COMPLUS".split()
+                # SHA-OUT keys
+                # source https://viveum.v-psp.com/Ncol/Viveum_e-Com-BAS_EN.pdf
+                keys = [
+                    'AAVADDRESS',
+                    'AAVCHECK',
+                    'AAVMAIL',
+                    'AAVNAME',
+                    'AAVPHONE',
+                    'AAVZIP',
+                    'ACCEPTANCE',
+                    'ALIAS',
+                    'AMOUNT',
+                    'BIC',
+                    'BIN',
+                    'BRAND',
+                    'CARDNO',
+                    'CCCTY',
+                    'CN',
+                    'COMPLUS',
+                    'CREATION_STATUS',
+                    'CURRENCY',
+                    'CVCCHECK',
+                    'DCC_COMMPERCENTAGE',
+                    'DCC_CONVAMOUNT',
+                    'DCC_CONVCCY',
+                    'DCC_EXCHRATE',
+                    'DCC_EXCHRATESOURCE',
+                    'DCC_EXCHRATETS',
+                    'DCC_INDICATOR',
+                    'DCC_MARGINPERCENTAGE',
+                    'DCC_VALIDHOURS',
+                    'DIGESTCARDNO',
+                    'ECI',
+                    'ED',
+                    'ENCCARDNO',
+                    'FXAMOUNT',
+                    'FXCURRENCY',
+                    'IBAN',
+                    'IP',
+                    'IPCTY',
+                    'NBREMAILUSAGE',
+                    'NBRIPUSAGE',
+                    'NBRIPUSAGE_ALLTX',
+                    'NBRUSAGE',
+                    'NCERROR',
+                    'NCERRORCARDNO',
+                    'NCERRORCN',
+                    'NCERRORCVC',
+                    'NCERRORED',
+                    'ORDERID',
+                    'PAYID',
+                    'PM',
+                    'SCO_CATEGORY',
+                    'SCORING',
+                    'STATUS',
+                    'SUBBRAND',
+                    'SUBSCRIPTION_ID',
+                    'TRXDATE',
+                    'VC'
+                ]
                 return key.upper() in keys
 
         items = sorted((k.upper(), v) for k, v in values.items())
@@ -110,7 +169,7 @@ class PaymentAcquirerOgone(osv.Model):
 
     def ogone_get_form_action_url(self, cr, uid, id, context=None):
         acquirer = self.browse(cr, uid, id, context=context)
-        return self._get_ogone_urls(cr, uid, acquirer.env, context=context)['ogone_standard_order_url']
+        return self._get_ogone_urls(cr, uid, acquirer.environment, context=context)['ogone_standard_order_url']
 
 
 class PaymentTxOgone(osv.Model):
@@ -351,7 +410,7 @@ class PaymentTxOgone(osv.Model):
             PSWD=tx.acquirer_id.ogone_password,
             ID=payid,
         )
-        query_direct_url = 'https://secure.ogone.com/ncol/%s/querydirect.asp' % (tx.acquirer_id.env,)
+        query_direct_url = 'https://secure.ogone.com/ncol/%s/querydirect.asp' % (tx.acquirer_id.environment,)
 
         tries = 2
         tx_done = False

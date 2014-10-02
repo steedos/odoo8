@@ -130,6 +130,7 @@
 
 */
 
+    var dummy = function () {};
 
     var website = openerp.website;
     website.add_template_file('/website/static/src/xml/website.snippets.xml');
@@ -151,9 +152,11 @@
             $("[data-oe-model] *, [data-oe-type=html] *").off('click');
             window.snippets = this.snippets = new website.snippet.BuildingBlock(this);
             this.snippets.appendTo(this.$el);
+            website.snippet.stop_animation();
             this.on('rte:ready', this, function () {
                 self.snippets.$button.removeClass("hidden");
-                  website.snippet.stop_animation();
+                website.snippet.start_animation();
+                $("#wrapwrap *").off('mousedown mouseup click');
             });
 
             return this._super.apply(this, arguments);
@@ -265,7 +268,8 @@
                             '$el': $style,
                             'selector-siblings': $style.data('selector-siblings'),
                             'selector-children': $style.data('selector-children'),
-                            'selector-vertical-children': $style.data('selector-vertical-children')
+                            'selector-vertical-children': $style.data('selector-vertical-children'),
+                            'data': $style.data()
                         };
                         selector.push($style.data('selector'));
                     });
@@ -317,13 +321,14 @@
             var self = this;
             var snipped_event_flag;
             $("#wrapwrap").on('click', function (event) {
-                if (snipped_event_flag || !event.srcElement) {
+                var srcElement = event.srcElement || (event.originalEvent && (event.originalEvent.originalTarget || event.originalEvent.target));
+                if (snipped_event_flag || !srcElement) {
                     return;
                 }
                 snipped_event_flag = true;
 
                 setTimeout(function () {snipped_event_flag = false;}, 0);
-                var $target = $(event.srcElement);
+                var $target = $(srcElement);
 
                 if ($target.parents(".oe_overlay").length) {
                     return;
@@ -332,6 +337,7 @@
                 if (!$target.is(website.snippet.globalSelector)) {
                     $target = $target.parents(website.snippet.globalSelector).first();
                 }
+
                 if (!self.dom_filter($target).length) {
                     $target = false;
                 }
@@ -357,15 +363,19 @@
         },
         clean_for_save: function () {
             var self = this;
-            $(website.snippet.globalSelector).each(function () {
-                var $snippet = $(this);
-                self.make_active($snippet);
-                self.make_active(false);
-                var editor = $snippet.data("snippet-editor");
-                if (editor) {
-                    editor.clean_for_save();
+            var options = website.snippet.options;
+            var template = website.snippet.templateOptions;
+            for (var k in options) {
+                if (template[k] && options[k].prototype.clean_for_save !== dummy) {
+                    var $snippet = this.dom_filter(template[k].selector);
+                    $snippet.each(function () {
+                        new options[k](self, null, $(this), k).clean_for_save();
+                    });
                 }
-            });
+            }
+            $("*[contentEditable], *[attributeEditable]")
+                .removeAttr('contentEditable')
+                .removeAttr('attributeEditable');
         },
         make_active: function ($snippet) {
             if ($snippet && this.$active_snipped_id && this.$active_snipped_id.get(0) === $snippet.get(0)) {
@@ -431,7 +441,6 @@
                     // snippet_selectors => to get selector-siblings, selector-children, selector-vertical-children
                     $snippet = $(this);
                     $toInsert = $snippet.find('.oe_snippet_body').clone();
-                    $toInsert.removeClass('oe_snippet_body');
 
                     var selector = [];
                     var selector_siblings = [];
@@ -494,6 +503,8 @@
                     });
                 },
                 stop: function(ev, ui){
+                    $toInsert.removeClass('oe_snippet_body');
+                    
                     if (action === 'insert' && ! dropped && $('.oe_drop_zone') && ui.position.top > 3) {
                         var el = $('.oe_drop_zone').nearest({x: ui.position.left, y: ui.position.top}).first();
                         if (el.length) {
@@ -730,14 +741,17 @@
             var styles = this.$target.data("snippet-option-ids") || {};
             styles[snippet_id] = this;
             this.$target.data("snippet-option-ids", styles);
-            this.$overlay = this.$target.data('overlay');
+            this.$overlay = this.$target.data('overlay') || $('<div>');
             this['snippet-option-id'] = snippet_id;
-            this.$el = website.snippet.templateOptions[snippet_id].$el.find(">li").clone();
+            var $option = website.snippet.templateOptions[snippet_id].$el;
+            this.$el = $option.find(">li").clone();
+            this.data = $option.data();
 
             this.required = this.$el.data("required");
 
             this.set_active();
-            this.$el.find('li[data-value] a').on('mouseover mouseout click', _.bind(this._mouse, this));
+            this.$el.find('li[data-value] a').on('mouseenter mouseleave click', _.bind(this._mouse, this));
+            this.$el.not(':not([data-value])').find("a").on('mouseenter mouseleave click', _.bind(this._mouse, this));
             this.$target.on('snippet-style-reset', _.bind(this.set_active, this));
 
             this.start();
@@ -745,7 +759,7 @@
         _mouse: function (event) {
             var self = this;
 
-            if (event.type === 'mouseout') {
+            if (event.type === 'mouseleave') {
                 if (!this.over) return;
                 this.over = false;
             } else if (event.type === 'click') {
@@ -755,7 +769,7 @@
             }
 
             var $prev, $next;
-            if (event.type === 'mouseout') {
+            if (event.type === 'mouseleave') {
                 $prev = $(event.currentTarget).parent();
                 $next = this.$el.find("li[data-value].active");
             } else {
@@ -837,7 +851,7 @@
             var self = this;
 
             // add or remove html class
-            if (np.$prev && this.required) {
+            if (np.$prev) {
                 this.$target.removeClass(np.$prev.data('value') || "");
             }
             if (np.$next) {
@@ -845,8 +859,7 @@
             }
         },
 
-        clean_for_save: function () {
-        }
+        clean_for_save: dummy
     });
 
     website.snippet.options.background = website.snippet.Option.extend({
@@ -866,20 +879,29 @@
             this._super(np);
             if (np.$next) {
                 if (np.$next.hasClass("oe_custom_bg")) {
-                    var editor = new website.editor.ImageDialog();
-                    editor.on('start', self, function (o) {o.url = np.$prev && np.$prev.data("src") || np.$next && np.$next.data("src") || "";});
-                    editor.on('save', self, function (o) {
-                        self._set_bg(o.url);
-                        np.$next.data("src", o.url);
+                    var $image = $('<img class="hidden"/>');
+                    $image.attr("src", np.$prev ? np.$prev.data("src") : '');
+                    $image.appendTo(self.$target);
+
+                    self.element = new CKEDITOR.dom.element($image[0]);
+                    var editor = new website.editor.MediaDialog(self, self.element);
+                    editor.appendTo(document.body);
+                    editor.$('[href="#editor-media-video"], [href="#editor-media-icon"]').addClass('hidden');
+
+                    $image.on('saved', self, function (o) {
+                        var src = $image.attr("src");
+                        self._set_bg(src);
+                        np.$next.data("src", src);
                         self.$target.trigger("snippet-style-change", [self, np]);
+                        $image.remove();
                     });
                     editor.on('cancel', self, function () {
                         if (!np.$prev || np.$prev.data("src") === "") {
                             self.$target.removeClass(np.$next.data("value"));
                             self.$target.trigger("snippet-style-change", [self, np]);
                         }
+                        $image.remove();
                     });
-                    editor.appendTo($('body'));
                 } else {
                     this._set_bg(np.$next.data("src"));
                 }
@@ -898,6 +920,7 @@
             var self = this;
             var bg = self.$target.css("background-image");
             this.$el.find('li').removeClass("active");
+            this.$el.find('li').removeClass("btn-primary");
             var $active = this.$el.find('li[data-value]')
                 .filter(function () {
                     var $li = $(this);
@@ -910,8 +933,13 @@
                     this.$el.find('li[data-value].oe_custom_bg') :
                     this.$el.find('li[data-value=""]');
             }
-            $active.addClass("active");
-            this.$el.find('li:has(li[data-value].active)').addClass("active");
+
+            //don't set active on an OpenDialog link, else it not possible to click on it again after.
+            // TODO in Saas-4 - Once bootstrap is in less
+            //      - add a class active-style to get the same display but without the active behaviour used by bootstrap in JS.
+            var classStr = _.string.contains($active[0].className, "oe_custom_bg") ? "btn-primary" : "active";
+            $active.addClass(classStr);
+            this.$el.find('li:has(li[data-value].active)').addClass(classStr);
         }
     });
 
@@ -927,9 +955,8 @@
         drop_and_build_snippet: function() {
             this.id = this.unique_id();
             this.$target.attr("id", this.id);
-            this.$target.find("[data-slide]").attr("href", "#" + this.id);
-            this.$target.find("[data-slide-to]").attr("data-target", "#" + this.id);
-
+            this.$target.find("[data-slide]").attr("data-cke-saved-href", "#" + this.id);
+            this.$target.find("[data-target]").attr("data-target", "#" + this.id);
             this.rebind_event();
         },
         on_clone: function ($clone) {
@@ -949,10 +976,10 @@
         },
         clean_for_save: function () {
             this._super();
-            this.$target.find(".item").removeClass("next prev left right");
-            if(!this.$target.find(".item.active").length) {
-                this.$target.find(".item:first").addClass("active");
-            }
+            this.$target.find(".item").removeClass("next prev left right active");
+            this.$target.find(".item:first").addClass("active");
+            this.$indicators.find('li').removeClass('active');
+            this.$indicators.find('li:first').addClass('active');
         },
         start : function () {
             var self = this;
@@ -1171,6 +1198,7 @@
                         dy = dy - dy%resize;
                         if (dy <= 0) dy = resize;
                         self.$target.css("height", dy+"px");
+                        self.$target.css("overflow", "hidden");
                         self.on_resize(compass, null, dy);
                         self.BuildingBlock.cover_target(self.$overlay, self.$target);
                         return;
@@ -1211,6 +1239,7 @@
             });
             this.$overlay.find(".oe_handle.size .auto_size").on('click', function (event){
                 self.$target.css("height", "");
+                self.$target.css("overflow", "");
                 self.BuildingBlock.cover_target(self.$overlay, self.$target);
                 return false;
             });
@@ -1391,6 +1420,9 @@
         start : function () {
             var self = this;
             this._super();
+            if (!self.$target.data("snippet-view")) {
+                this.$target.data("snippet-view", new website.snippet.animationRegistry.parallax(this.$target));
+            }
             this.scroll();
             this.$target.on('snippet-style-change snippet-style-preview', function () {
                 self.$target.data("snippet-view").set_values();
@@ -1425,6 +1457,93 @@
         }
     });
 
+    website.snippet.options.transform = website.snippet.Option.extend({
+        start: function () {
+            var self = this;
+            this._super();
+
+            this.$el.find(".clear-style").click(function (event) {
+                self.$target.removeClass("fa-spin").attr("style", "");
+                self.resetTransfo();
+            });
+
+            this.$el.find(".style").click(function (event) {
+                var settings = self.$target.data("transfo").settings;
+                self.$target.transfo({ hide: (settings.hide = !settings.hide) });
+            });
+
+            this.$overlay.find('.oe_snippet_clone, .oe_handles').addClass('hidden');
+
+            this.$overlay.find('[data-toggle="dropdown"]')
+                .on("mousedown", function () {
+                    self.$target.transfo("hide");
+                });
+        },
+        resetTransfo: function () {
+            var self = this;
+            this.$target.transfo("destroy");
+            this.$target.transfo({
+                hide: true,
+                callback: function () {
+                    var pos = $(this).data("transfo").$center.offset();
+                    self.$overlay.css({
+                        'top': pos.top,
+                        'left': pos.left,
+                        'position': 'absolute',
+                    });
+                    self.$overlay.find(".oe_overlay_options").attr("style", "width:0; left:0!important; top:0;");
+                    self.$overlay.find(".oe_overlay_options > .btn-group").attr("style", "width:160px; left:-80px;");
+                }});
+            this.$target.data('transfo').$markup
+                .on("mouseover", function () {
+                    self.$target.trigger("mouseover");
+                })
+                .mouseover();
+        },
+        onFocus : function () {
+            this.resetTransfo();
+        },
+        onBlur : function () {
+            this.$target.transfo("hide");
+        },
+    });
+
+    website.snippet.options.media = website.snippet.Option.extend({
+        start: function () {
+            var self = this;
+            this._super();
+
+            website.snippet.start_animation(true, this.$target);
+
+            $(document.body).on("media-saved", self, function (event, prev , item) {
+                self.editor.onBlur();
+                self.BuildingBlock.make_active(false);
+                if (self.$target.parent().data("oe-field") !== "image") {
+                    self.BuildingBlock.make_active($(item));
+                }
+            });
+
+            this.$el.find(".edition").click(function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                self.element = new CKEDITOR.dom.element(self.$target[0]);
+                new website.editor.MediaDialog(self, self.element).appendTo(document.body);
+            });
+        },
+        onFocus : function () {
+            var self = this;
+            if (this.$target.parent().data("oe-field") === "image") {
+                this.$overlay.addClass("hidden");
+                self.element = new CKEDITOR.dom.element(self.$target[0]);
+                new website.editor.MediaDialog(self, self.element).appendTo(document.body);
+                self.BuildingBlock.make_active(false);
+            }
+            setTimeout(function () {
+                self.$target.find(".css_editable_mode_display").removeAttr("_moz_abspos");
+            },0);
+        },
+    });
+
 
     website.snippet.Editor = openerp.Class.extend({
         init: function (BuildingBlock, dom) {
@@ -1448,7 +1567,9 @@
         */
         _readXMLData: function() {
             var self = this;
-            this.$el = this.BuildingBlock.$snippets.filter(function () { return $(this).data("snippet-id") == self.snippet_id; }).clone();
+            if(this && this.BuildingBlock && this.BuildingBlock.$snippets) {
+                this.$el = this.BuildingBlock.$snippets.filter(function () { return $(this).data("snippet-id") == self.snippet_id; }).clone();
+            }
             var $options = this.$overlay.find(".oe_overlay_options");
             if ($options.find(".oe_options ul li").length) {
                 $options.find(".oe_options").removeClass("hidden");
@@ -1564,6 +1685,10 @@
             if (this.selector_vertical_children === "")
                 this.selector_vertical_children = false;
 
+            if (!this.selector_siblings && !this.selector_children && !this.selector_vertical_children) {
+                this.$overlay.find(".oe_snippet_move").addClass('hidden');
+            }
+
 
             if ($ul.find("li").length) {
                 $styles.removeClass("hidden");
@@ -1649,19 +1774,6 @@
                 this.styles[i].onBlur();
             }
             this.$overlay.removeClass('oe_active');
-        },
-
-        /* clean_for_save
-        *  function called just before save vue
-        */
-        clean_for_save: function () {
-            for (var i in this.styles){
-                this.styles[i].clean_for_save();
-            }
-            this.$target.removeAttr('contentEditable')
-                .find('*').removeAttr('contentEditable');
-            this.$target.removeAttr('attributeEditable')
-                .find('*').removeAttr('attributeEditable');
         },
     });
 

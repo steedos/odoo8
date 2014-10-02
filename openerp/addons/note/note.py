@@ -116,23 +116,22 @@ class note_note(osv.osv):
     }
     _order = 'sequence'
 
-    def read_group(self, cr, uid, domain, fields, groupby, offset=0, limit=None, context=None, orderby=False):
+    def read_group(self, cr, uid, domain, fields, groupby, offset=0, limit=None, context=None, orderby=False, lazy=True):
         if groupby and groupby[0]=="stage_id":
 
             #search all stages
             current_stage_ids = self.pool.get('note.stage').search(cr,uid,[('user_id','=',uid)], context=context)
 
             if current_stage_ids: #if the user have some stages
-
-                #dict of stages: map les ids sur les noms
-                stage_name = dict(self.pool.get('note.stage').name_get(cr, uid, current_stage_ids, context=context))
+                stages = self.pool['note.stage'].browse(cr, uid, current_stage_ids, context=context)
 
                 result = [{ #notes by stage for stages user
                         '__context': {'group_by': groupby[1:]},
-                        '__domain': domain + [('stage_ids.id', '=', current_stage_id)],
-                        'stage_id': (current_stage_id, stage_name[current_stage_id]),
-                        'stage_id_count': self.search(cr,uid, domain+[('stage_ids', '=', current_stage_id)], context=context, count=True)
-                    } for current_stage_id in current_stage_ids]
+                        '__domain': domain + [('stage_ids.id', '=', stage.id)],
+                        'stage_id': (stage.id, stage.name),
+                        'stage_id_count': self.search(cr,uid, domain+[('stage_ids', '=', stage.id)], context=context, count=True),
+                        '__fold': stage.fold,
+                    } for stage in stages]
 
                 #note without user's stage
                 nb_notes_ws = self.search(cr,uid, domain+[('stage_ids', 'not in', current_stage_ids)], context=context, count=True)
@@ -148,8 +147,9 @@ class note_note(osv.osv):
                         result = [{
                             '__context': {'group_by': groupby[1:]},
                             '__domain': domain + [dom_not_in],
-                            'stage_id': (current_stage_ids[0], stage_name[current_stage_ids[0]]),
-                            'stage_id_count':nb_notes_ws
+                            'stage_id': (stages[0].id, stages[0].name),
+                            'stage_id_count':nb_notes_ws,
+                            '__fold': stages[0].name,
                         }] + result
 
             else: # if stage_ids is empty
@@ -169,7 +169,7 @@ class note_note(osv.osv):
 
         else:
             return super(note_note, self).read_group(self, cr, uid, domain, fields, groupby, 
-                offset=offset, limit=limit, context=context, orderby=orderby)
+                offset=offset, limit=limit, context=context, orderby=orderby,lazy=lazy)
 
 
 #upgrade config setting page to configure pad, fancy and tags mode

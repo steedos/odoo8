@@ -59,13 +59,13 @@ class sale_quote(http.Controller):
         return request.website.render('website_quote.so_quotation', values)
 
     @http.route(['/quote/accept'], type='json', auth="public", website=True)
-    def accept(self, order_id=None, token=None, signer=None, sign=None, **post):
+    def accept(self, order_id, token=None, signer=None, sign=None, **post):
         order_obj = request.registry.get('sale.order')
         order = order_obj.browse(request.cr, SUPERUSER_ID, order_id)
         if token != order.access_token:
             return request.website.render('website.404')
-        attachments=sign and [('signature.png', sign)] or []
-        order_obj.signal_order_confirm(request.cr, SUPERUSER_ID, [order_id], context=request.context)
+        attachments=sign and [('signature.png', sign.decode('base64'))] or []
+        order_obj.signal_workflow(request.cr, SUPERUSER_ID, [order_id], 'order_confirm', context=request.context)
         message = _('Order signed by %s') % (signer,)
         self.__message_post(message, order_id, type='comment', subtype='mt_comment', attachments=attachments)
         return True
@@ -111,7 +111,7 @@ class sale_quote(http.Controller):
         return True
 
     @http.route(['/quote/update_line'], type='json', auth="public", website=True)
-    def update(self, line_id=None, remove=False, unlink=False, order_id=None, token=None, **post):
+    def update(self, line_id, remove=False, unlink=False, order_id=None, token=None, **post):
         order = request.registry.get('sale.order').browse(request.cr, SUPERUSER_ID, int(order_id))
         if token != order.access_token:
             return request.website.render('website.404')

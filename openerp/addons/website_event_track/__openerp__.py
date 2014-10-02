@@ -4,6 +4,7 @@
     'name': 'Advanced Events',
     'category': 'Website',
     'summary': 'Sponsors, Tracks, Agenda, Event News',
+    'website': 'https://www.odoo.com/page/events',
     'version': '1.0',
     'description': """
 Online Advanced Events
@@ -28,7 +29,8 @@ Adds support for:
     ],
     'qweb': ['static/src/xml/*.xml'],
     'demo': [
-        'data/event_demo.xml'
+        'data/event_demo.xml',
+        'data/website_event_track_demo.xml'
     ],
     'installable': True,
 }

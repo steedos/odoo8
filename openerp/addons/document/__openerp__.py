@@ -36,7 +36,7 @@ This is a complete document management system.
         * Files Size by Month (graph)
 """,
     'author': 'OpenERP SA',
-    'website': 'http://www.openerp.com',
+    'website': 'https://www.odoo.com',
     'depends': ['knowledge', 'mail'],
     'data': [
         'security/document_security.xml',
@@ -45,10 +45,10 @@ This is a complete document management system.
         'wizard/document_configuration_view.xml',
         'security/ir.model.access.csv',
         'report/document_report_view.xml',
+        'views/document.xml',
     ],
     'demo': [ 'document_demo.xml' ],
     'test': ['test/document_test2.yml'],
-    'js': ['static/src/js/document.js'],
     'installable': True,
     'auto_install': False,
     'images': ['images/1_directories.jpeg','images/2_storage_media.jpeg','images/3_directories_structure.jpeg'],

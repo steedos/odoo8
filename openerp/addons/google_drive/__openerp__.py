@@ -23,17 +23,15 @@
     'name': 'Google Drive™ integration',
     'version': '0.2',
     'author': 'OpenERP SA',
-    'website': 'http://openerp.com',
+    'website': 'https://www.odoo.com',
     'category': 'Tools',
     'installable': True,
     'auto_install': False,
-    'js': [
-        'static/src/js/gdrive.js',
-    ],
     'data': [
         'security/ir.model.access.csv',
         'res_config_user_view.xml',
-        'google_drive_data.xml'
+        'google_drive_data.xml',
+        'views/google_drive.xml',
     ],
     'demo': [
         'google_drive_demo.xml'

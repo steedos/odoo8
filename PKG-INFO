@@ -1,12 +1,12 @@
 Metadata-Version: 1.1
 Name: openerp
-Version: 8.0dev-20140416-230101
-Summary: OpenERP Server
-Home-page: http://www.openerp.com
+Version: 8.0-eaa0f29
+Summary: Odoo Server
+Home-page: https://www.odoo.com
 Author: OpenERP S.A.
-Author-email: info@openerp.com
+Author-email: info@odoo.com
 License: AGPL-3
-Description: OpenERP is a complete ERP and CRM. The main features are accounting (analytic
+Description: Odoo is a complete ERP and CRM. The main features are accounting (analytic
         and financial), stock management, sales and purchases management, tasks
         automation, marketing campaigns, help desk, POS, etc. Technical features include
         a distributed server, flexible workflows, an object database, a dynamic GUI,

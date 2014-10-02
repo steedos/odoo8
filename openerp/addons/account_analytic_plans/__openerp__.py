@@ -19,7 +19,6 @@
 #
 ##############################################################################
 
-
 {
     'name': 'Multiple Analytic Plans',
     'version': '1.0',
@@ -64,7 +63,7 @@ So when this line of invoice will be confirmed, it will generate 3 analytic line
 The analytic plan validates the minimum and maximum percentage at the time of creation of distribution models.
         """,
     'author': 'OpenERP SA',
-    'website': 'http://www.openerp.com',
+    'website': 'https://www.odoo.com/page/accounting',
     'images': ['images/analytic_plan.jpeg'],
     'depends': ['account', 'account_analytic_default'],
     'data': [
@@ -74,6 +73,8 @@ The analytic plan validates the minimum and maximum percentage at the time of cr
         'account_analytic_plans_report.xml',
         'wizard/analytic_plan_create_model_view.xml',
         'wizard/account_crossovered_analytic_view.xml',
+        'views/report_crossoveredanalyticplans.xml',
+        'views/account_analytic_plans.xml',
     ],
     'demo': [],
     'test': ['test/acount_analytic_plans_report.yml'],

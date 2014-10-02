@@ -28,7 +28,7 @@ Allow users to sign up and reset their password
     'author': 'OpenERP SA',
     'version': '1.0',
     'category': 'Authentication',
-    'website': 'http://www.openerp.com',
+    'website': 'https://www.odoo.com',
     'installable': True,
     'auto_install': True,
     'depends': [
@@ -42,6 +42,5 @@ Allow users to sign up and reset their password
         'res_users_view.xml',
         'views/auth_signup_login.xml',
     ],
-    'js': [],
     'bootstrap': True,
 }

@@ -12,7 +12,7 @@
             </form>
             <group string="res_config_contents" position="replace">
                 <separator string="Configure Directories"/>
-                <p>OpenERP's Document Management System supports mapping virtual folders with documents. The virtual folder of a document can be used to manage the files attached to the document, or to print and download any report. This tool will create directories automatically according to modules installed.</p>
+                <p>Odoo's Document Management System supports mapping virtual folders with documents. The virtual folder of a document can be used to manage the files attached to the document, or to print and download any report. This tool will create directories automatically according to modules installed.</p>
                 <p>When executing this wizard, it will configure your directories automatically according to modules installed.</p>
             </group>
           </data>
@@ -31,7 +31,7 @@
 
     <record model="ir.actions.todo" id="config_auto_directory">
         <field name="action_id" ref="action_config_auto_directory"/>
-        <field name="type">automatic</field>
+        <field name="state">open</field>
     </record>
   </data>
 </openerp>

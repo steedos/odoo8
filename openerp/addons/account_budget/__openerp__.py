@@ -19,7 +19,6 @@
 #
 ##############################################################################
 
-
 {
     'name': 'Budgets Management',
     'version': '1.0',
@@ -48,7 +47,7 @@ Three reports are available:
        the spreading, for the selected Analytic Accounts of Budgets.
 """,
     'author': 'OpenERP SA',
-    'website': 'http://www.openerp.com',
+    'website': 'https://www.odoo.com/page/accounting',
     'images': ['images/budget.jpeg','images/budgetary_position.jpeg'],
     'depends': ['account'],
     'data': [
@@ -61,13 +60,18 @@ Three reports are available:
         'wizard/account_budget_report_view.xml',
         'wizard/account_budget_crossovered_summary_report_view.xml',
         'wizard/account_budget_crossovered_report_view.xml',
+
+        'views/report_analyticaccountbudget.xml',
+        'views/report_budget.xml',
+        'views/report_crossoveredbudget.xml',
     ],
     'demo': ['account_budget_demo.xml'],
-    'test':[
+    'test': [
         'test/account_budget.yml',
         'test/account_budget_report.yml',
     ],
     'installable': True,
     'auto_install': False,
 }
+
 # vim:expandtab:smartindent:tabstop=4:softtabstop=4:shiftwidth=4:

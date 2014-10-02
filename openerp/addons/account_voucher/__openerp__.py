@@ -20,7 +20,7 @@
 ##############################################################################
 
 {
-    'name' : 'eInvoicing & Payments',
+    'name' : 'Online Billing',
     'version' : '1.0',
     'author' : 'OpenERP SA',
     'summary': 'Send Invoices and Track Payments',
@@ -41,7 +41,7 @@ This module manages:
     """,
     'category': 'Accounting & Finance',
     'sequence': 4,
-    'website' : 'http://openerp.com',
+    'website' : 'https://www.odoo.com/page/billing',
     'images' : ['images/customer_payment.jpeg','images/journal_voucher.jpeg','images/sales_receipt.jpeg','images/supplier_voucher.jpeg','images/customer_invoice.jpeg','images/customer_refunds.jpeg'],
     'depends' : ['account'],
     'demo' : [],
@@ -49,8 +49,6 @@ This module manages:
         'security/ir.model.access.csv',
         'account_voucher_sequence.xml',
         'account_voucher_workflow.xml',
-        'account_voucher_report.xml',
-        'wizard/account_statement_from_invoice_view.xml',
         'account_voucher_view.xml',
         'voucher_payment_receipt_view.xml',
         'voucher_sales_purchase_view.xml',
@@ -66,7 +64,6 @@ This module manages:
         'test/account_voucher.yml',
         'test/sales_receipt.yml',
         'test/sales_payment.yml',
-        'test/account_voucher_report.yml',
         'test/case1_usd_usd.yml',
         'test/case1_usd_usd_payment_rate.yml',
         'test/case2_usd_eur_debtor_in_eur.yml',

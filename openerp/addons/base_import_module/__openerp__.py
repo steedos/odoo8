@@ -8,14 +8,12 @@ This module allows authorized users to import a custom data module (.xml files a
 for customization purpose.
 """,
     'category': 'Uncategorized',
-    'website': 'http://www.openerp.com',
+    'website': 'https://www.odoo.com',
     'author': 'OpenERP SA',
     'depends': ['web'],
     'installable': True,
     'auto_install': False,
-    'data': [],
-    'css': [],
-    'js': [],
+    'data': ['views/base_import_module.xml'],
     'qweb': [],
     'test': [],
 }

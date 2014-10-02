@@ -1,8 +1,10 @@
 /* ---- SNIPPET EDITOR ---- {{{ */
 #oe_snippets {
   position: fixed;
+  top: 34px;
   left: 0px;
   right: 0px;
+  padding-top: 6px;
   background: #282828;
   -webkit-box-shadow: 0px 10px 10px -10px black inset;
   -moz-box-shadow: 0px 10px 10px -10px black inset;
@@ -102,10 +104,6 @@
 }
 .oe_snippet .oe_snippet_thumbnail .oe_snippet_thumbnail_img {
   height: 74px;
-  -webkit-transition: all 150ms linear;
-  -moz-transition: all 150ms linear;
-  -o-transition: all 150ms linear;
-  transition: all 150ms linear;
   -webkit-box-shadow: inset 0px 0px 0px 3px #333333;
   -moz-box-shadow: inset 0px 0px 0px 3px #333333;
   box-shadow: inset 0px 0px 0px 3px #333333;
@@ -201,6 +199,7 @@
   height: 0;
   position: absolute;
   background: transparent;
+  z-index: 1001;
   -webkit-border-radius: 3px;
   -moz-border-radius: 3px;
   -ms-border-radius: 3px;
@@ -325,11 +324,13 @@
   top: auto;
   left: 50%;
   bottom: -6px;
+  margin-left: -50px;
 }
 .oe_overlay .oe_handle.size .oe_handle_button {
+  position: relative;
   z-index: 3;
   text-align: center;
-  margin-left: -32px;
+  margin-left: -52px;
   margin-top: -10px;
   left: 0px;
 }
@@ -341,15 +342,17 @@
   box-shadow: 0 0 5px 3px rgba(255, 255, 255, 0.7);
 }
 .oe_overlay .oe_handle.size .size {
+  position: absolute;
   width: 64px;
   cursor: row-resize;
   top: 9px;
+  margin-left: 52px;
+  padding: 0 5px;
 }
 .oe_overlay .oe_handle.size .auto_size {
-  width: 20px;
-  padding: 0 5px;
-  top: 1px;
-  margin-left: 36px;
+  position: absolute;
+  width: 100px;
+  top: 9px;
   cursor: pointer;
 }
 .oe_overlay .oe_handle.readonly {
@@ -370,6 +373,13 @@
 }
 .oe_overlay .oe_overlay_options > .btn-group {
   left: -50%;
+  white-space: nowrap;
+}
+.oe_overlay .oe_overlay_options > .btn-group > a {
+  cursor: pointer;
+  display: inline-block;
+  float: none;
+  margin: 0 -3px;
 }
 .oe_overlay .oe_overlay_options .btn, .oe_overlay .oe_overlay_options a {
   cursor: pointer;

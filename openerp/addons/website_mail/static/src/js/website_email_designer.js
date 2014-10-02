@@ -1,17 +1,26 @@
 (function () {
     'use strict';
-
     var website = openerp.website;
 
-    website.snippet.BuildingBlock.include({
+    website.if_dom_contains('#email_designer', function () {
+        website.snippet.BuildingBlock.include({
+            _get_snippet_url: function () {
+                return '/website_mail/snippets';
+            }
+        });
 
-        // init: function (parent) {
-        //     this._super.apply(this, arguments);
-        // },
+        $('.js_template_set').click(function(ev) {
+            // Copy the template to the body of the email
+            $('#email_designer').show();
+            $('#email_template').hide();
+            $(".js_content", $(this).parent()).children().clone().appendTo('#email_body');
+            $(".js_content", $(this).parent()).children().clone().appendTo('#email_body_html');
+            $('#email_body').addClass('oe_dirty');
+            $('#email_body_html').addClass('oe_dirty');
 
-        _get_snippet_url: function () {
-            return '/website_mail/snippets';
-        }
-
+            openerp.website.editor_bar.edit();
+            event.preventDefault();
+        });
     });
+
 })();

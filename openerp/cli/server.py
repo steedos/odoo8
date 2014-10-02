@@ -81,8 +81,11 @@ def report_configuration():
 
 def rm_pid_file():
     config = openerp.tools.config
-    if not openerp.evented and os.path.exists(config['pidfile']):
-        os.unlink(config['pidfile'])
+    if not openerp.evented and config['pidfile']:
+        try:
+            os.unlink(config['pidfile'])
+        except OSError:
+            pass
 
 def setup_pid_file():
     """ Create a file with the process id written in it.
@@ -109,13 +112,13 @@ def export_translation():
         config["translate_out"])
 
     fileformat = os.path.splitext(config["translate_out"])[-1][1:].lower()
-    buf = file(config["translate_out"], "w")
-    registry = openerp.modules.registry.RegistryManager.new(dbname)
-    cr = registry.cursor()
-    openerp.tools.trans_export(config["language"],
-        config["translate_modules"] or ["all"], buf, fileformat, cr)
-    cr.close()
-    buf.close()
+
+    with open(config["translate_out"], "w") as buf:
+        registry = openerp.modules.registry.RegistryManager.new(dbname)
+        with openerp.api.Environment.manage():
+            with registry.cursor() as cr:
+                openerp.tools.trans_export(config["language"],
+                    config["translate_modules"] or ["all"], buf, fileformat, cr)
 
     _logger.info('translation file written successfully')
 
@@ -125,11 +128,11 @@ def import_translation():
     dbname = config['db_name']
 
     registry = openerp.modules.registry.RegistryManager.new(dbname)
-    cr = registry.cursor()
-    openerp.tools.trans_load( cr, config["translate_in"], config["language"],
-        context=context)
-    cr.commit()
-    cr.close()
+    with openerp.api.Environment.manage():
+        with registry.cursor() as cr:
+            openerp.tools.trans_load(
+                cr, config["translate_in"], config["language"], context=context,
+            )
 
 def main(args):
     check_root_user()
@@ -166,6 +169,7 @@ def main(args):
     sys.exit(rc)
 
 class Server(Command):
+    """Start the odoo server (default command)"""
     def run(self, args):
         main(args)
 

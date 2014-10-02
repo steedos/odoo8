@@ -22,21 +22,14 @@ Re-implement openerp's file import system:
   need or want an online import can avoid it being available to users.
 """,
     'category': 'Uncategorized',
-    'website': 'http://www.openerp.com',
+    'website': 'https://www.odoo.com',
     'author': 'OpenERP SA',
     'depends': ['web'],
     'installable': True,
     'auto_install': True,
     'data': [
         'security/ir.model.access.csv',
-    ],
-    'css': [
-        'static/src/css/import.css',
-    ],
-    'js': [
-        'static/lib/javascript-state-machine/state-machine.js',
-        'static/src/js/import.js',
+        'views/base_import.xml',
     ],
     'qweb': ['static/src/xml/import.xml'],
-    'test': ['static/test/states.js'],
 }

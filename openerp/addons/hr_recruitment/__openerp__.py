@@ -25,7 +25,7 @@
     'version': '1.0',
     'category': 'Human Resources',
     'sequence': 25,
-    'summary': 'Jobs, Recruitment, Applications, Job Interviews',
+    'summary': 'Jobs, Recruitment, Applications, Job Interviews, Surveys',
     'description': """
 Manage job positions and the recruitment process
 ================================================
@@ -36,8 +36,9 @@ It is integrated with the mail gateway to automatically fetch email sent to <job
 You can define the different phases of interviews and easily rate the applicant from the kanban view.
 """,
     'author': 'OpenERP SA',
-    'website': 'http://www.openerp.com',
-    'images': ['images/hr_recruitment_analysis.jpeg','images/hr_recruitment_applicants.jpeg','static/src/img/down1.png'],
+    'website': 'https://www.odoo.com/page/recruitment',
+    'images': ['images/hr_recruitment_analysis.jpeg',
+               'images/hr_recruitment_applicants.jpeg'],
     'depends': [
         'decimal_precision',
         'hr',
@@ -53,20 +54,15 @@ You can define the different phases of interviews and easily rate the applicant 
         'security/hr_recruitment_security.xml',
         'security/ir.model.access.csv',
         'report/hr_recruitment_report_view.xml',
-        'board_hr_recruitment_statistical_view.xml',
         'hr_recruitment_installer_view.xml',
         'res_config_view.xml',
+        'survey_data_recruitment.xml',
         'hr_recruitment_data.xml',
+        'views/hr_recruitment.xml',
     ],
     'demo': ['hr_recruitment_demo.xml'],
-    'js': [
-        'static/src/js/job_position.js',
-    ],
     'test': ['test/recruitment_process.yml'],
-    'css':['static/src/css/job_position.css'],
     'installable': True,
     'auto_install': False,
     'application': True,
 }
-
-# vim:expandtab:smartindent:tabstop=4:softtabstop=4:shiftwidth=4:

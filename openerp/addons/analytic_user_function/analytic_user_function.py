@@ -26,6 +26,7 @@ import openerp.addons.decimal_precision as dp
 class analytic_user_funct_grid(osv.osv):
     _name="analytic.user.funct.grid"
     _description= "Price per User"
+    _rec_name="user_id"
     _columns={
         'user_id': fields.many2one("res.users", "User", required=True,),
         'product_id': fields.many2one("product.product", "Service", required=True,),
@@ -58,7 +59,7 @@ class analytic_user_funct_grid(osv.osv):
 class account_analytic_account(osv.osv):
     _inherit = "account.analytic.account"
     _columns = {
-        'user_product_ids': fields.one2many('analytic.user.funct.grid', 'account_id', 'Users/Products Rel.'),
+        'user_product_ids': fields.one2many('analytic.user.funct.grid', 'account_id', 'Users/Products Rel.', copy=True),
     }
 
 

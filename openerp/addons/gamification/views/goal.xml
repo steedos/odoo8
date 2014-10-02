@@ -23,7 +23,7 @@
             <field name="name">Goal List</field>
             <field name="model">gamification.goal</field>
             <field name="arch" type="xml">
-                <tree string="Goal List" colors="red:state == 'failed';green:state == 'reached';grey:state == 'canceled'"> 
+                <tree string="Goal List" colors="red:state == 'failed';green:state == 'reached';grey:state == 'canceled'" create="false">
                     <field name="definition_id" invisible="1" />
                     <field name="user_id" invisible="1" />
                     <field name="start_date"/>
@@ -41,12 +41,12 @@
             <field name="name">Goal Form</field>
             <field name="model">gamification.goal</field>
             <field name="arch" type="xml">
-                <form string="Goal" version="7.0">
+                <form string="Goal">
                     <header>
                         <button string="Start goal" type="object" name="action_start" states="draft" class="oe_highlight"/>
                         
-                        <button string="Goal Reached" type="object" name="action_reach" states="inprogress,inprogress_update" />
-                        <button string="Goal Failed" type="object" name="action_fail" states="inprogress,inprogress_update"/>
+                        <button string="Goal Reached" type="object" name="action_reach" states="inprogress" />
+                        <button string="Goal Failed" type="object" name="action_fail" states="inprogress"/>
                         <button string="Reset Completion" type="object" name="action_cancel" states="failed,reached" groups="base.group_no_one" />
                         <field name="state" widget="statusbar" statusbar_visible="draft,inprogress,reached" />
                     </header>
@@ -86,10 +86,6 @@
                             </group>
                         </group>
                     </sheet>
-                    <div class="oe_chatter">
-                        <field name="message_follower_ids" widget="mail_followers"/>
-                        <field name="message_ids" widget="mail_thread"/>
-                    </div>
                 </form>
             </field>
         </record>
@@ -102,19 +98,27 @@
                     <filter name="my" string="My Goals" domain="[('user_id', '=', uid)]"/>
                     <separator/>
                     <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
-                    <filter name="inprogress" string="Current"
+                    <filter name="inprogress" string="Running"
                         domain="[
                             '|',
-                                ('state', 'in', ('inprogress', 'inprogress_update')),
-                                ('end_date', '>=', context_today().strftime('%%Y-%%m-%%d'))
-                            ]"/>
-                    <filter name="closed" string="Passed" domain="[('state', 'in', ('reached', 'failed'))]"/>
+                                ('state', '=', 'inprogress'),
+                                '&amp;',
+                                    ('state', 'in', ('done', 'failed')),
+                                    ('end_date', '>=', context_today().strftime('%%Y-%%m-%%d'))
+                        ]"/>
+                    <filter name="closed" string="Done"
+                        domain="[
+                            ('state', 'in', ('reached', 'failed')),
+                            '|',
+                                ('end_date', '=', False),
+                                ('end_date', '&lt;', context_today().strftime('%%Y-%%m-%%d'))
+                        ]"/>
                     <separator/>
 
                     <field name="user_id"/>
                     <field name="definition_id"/>
                     <field name="challenge_id"/>
-                    <group expand="0" string="Group By...">
+                    <group expand="0" string="Group By">
                         <filter name="group_by_user" string="User" domain="[]" context="{'group_by':'user_id'}"/>
                         <filter name="group_by_definition" string="Goal Definition" domain="[]" context="{'group_by':'definition_id'}"/>
                         <filter string="State" domain="[]" context="{'group_by':'state'}"/>
@@ -128,7 +132,7 @@
             <field name="name">Goal Kanban View</field>
             <field name="model">gamification.goal</field>
             <field name="arch" type="xml">
-                <kanban version="7.0" class="oe_background_grey">
+                <kanban class="oe_background_grey">
                     <field name="definition_id"/>
                     <field name="user_id"/>
                     <field name="current"/>
@@ -148,7 +152,7 @@
                         <t t-name="kanban-box">
                             <div t-attf-class="oe_kanban_card oe_gamification_goal oe_kanban_goal #{record.end_date.raw_value &lt; record.last_update.raw_value &amp; record.state.raw_value == 'failed' ? 'oe_kanban_color_2' : ''} #{record.end_date.raw_value &lt; record.last_update.raw_value &amp; record.state.raw_value == 'reached' ? 'oe_kanban_color_5' : ''}">
                                 <div class="oe_kanban_content">
-                                    <p><h4 class="oe_goal_name" tooltip="kanban-tooltip"><field name="definition_id" /></h4></p>
+                                    <p><strong><h4 class="oe_goal_name text-center" tooltip="kanban-tooltip"><field name="definition_id" /></h4></strong></p>
                                     <div class="oe_kanban_left">
                                         <img t-att-src="kanban_image('res.users', 'image_small', record.user_id.raw_value)" t-att-title="record.user_id.value" width="24" height="24" />
                                     </div>
@@ -157,7 +161,7 @@
                                         <t t-if="record.definition_display.raw_value == 'boolean'">
                                             <div class="oe_goal_state oe_e">
                                                 <t t-if="record.state.raw_value=='reached'"><span class="oe_green" title="Goal Reached">W</span></t>
-                                                <t t-if="record.state.raw_value=='inprogress' || record.state.raw_value=='inprogress_update'"><span title="Goal in Progress">N</span></t>
+                                                <t t-if="record.state.raw_value=='inprogress'"><span title="Goal in Progress">N</span></t>
                                                 <t t-if="record.state.raw_value=='failed'"><span class="oe_red" title="Goal Failed">X</span></t>
                                             </div>
                                         </t>
@@ -224,7 +228,7 @@
             <field name="name">Goal Definitions Form</field>
             <field name="model">gamification.goal.definition</field>
             <field name="arch" type="xml">
-                <form string="Goal definitions" version="7.0">
+                <form string="Goal definitions">
                     <sheet>
                             <label for="name" class="oe_edit_only"/>
                             <h1>
@@ -240,16 +244,35 @@
                                 <field widget="radio" name="computation_mode"/>
 
                                 <!-- Hide the fields below if manually -->
-                                <field name="model_id" attrs="{'invisible':[('computation_mode','not in',('sum', 'count'))], 'required':[('computation_mode','in',('sum', 'count'))]}" class="oe_inline"/>
-                                <field name="field_id" attrs="{'invisible':[('computation_mode','!=','sum')], 'required':[('computation_mode','=','sum')]}" domain="[('model_id','=',model_id)]"  class="oe_inline"/>
-                                <field name="field_date_id" attrs="{'invisible':[('computation_mode','not in',('sum', 'count'))]}" domain="[('ttype', 'in', ('date', 'datetime')), ('model_id','=',model_id)]" class="oe_inline"/>
+                                <field name="model_id" class="oe_inline" on_change="on_change_model_id(model_id)"
+                                    attrs="{'invisible':[('computation_mode','not in',('sum', 'count'))], 'required':[('computation_mode','in',('sum', 'count'))]}"/>
+                                <field name="model_inherited_model_ids" invisible="True" />
+                                <field name="field_id" class="oe_inline"
+                                    attrs="{'invisible':[('computation_mode','!=','sum')], 'required':[('computation_mode','=','sum')]}"
+                                    domain="['|',
+                                        ('model_id', '=', model_id),
+                                        ('model_id', 'in', model_inherited_model_ids and model_inherited_model_ids[0] and model_inherited_model_ids[0][2])]" />
+                                <field name="field_date_id" class="oe_inline" attrs="{'invisible':[('computation_mode','not in',('sum', 'count'))]}"
+                                    domain="[
+                                        ('ttype', 'in', ('date', 'datetime')),
+                                        '|',
+                                            ('model_id', '=', model_id),
+                                            ('model_id', 'in', model_inherited_model_ids and model_inherited_model_ids[0] and model_inherited_model_ids[0][2])]" />
                                 <field name="domain" attrs="{'invisible':[('computation_mode','not in',('sum', 'count'))], 'required':[('computation_mode','in',('sum', 'count'))]}" class="oe_inline"/>
                                 <field name="compute_code" attrs="{'invisible':[('computation_mode','!=','python')], 'required':[('computation_mode','=','python')]}" placeholder="e.g. result = pool.get('mail.followers').search(cr, uid, [('res_model', '=', 'mail.group'), ('partner_id', '=', object.user_id.partner_id.id)], count=True, context=context)"/>
                                 <field name="condition" widget="radio"/>
                             </group>
+                            <group string="Optimisation" attrs="{'invisible': [('computation_mode', '!=', 'count')]}">
+                                <field name="batch_mode" />
+                                <div colspan="4">In batch mode, the domain is evaluated globally. If enabled, do not use keyword 'user' in above filter domain.</div>
+                                <field name="batch_distinctive_field" attrs="{'invisible': [('batch_mode', '=', False)], 'required':  [('batch_mode', '=', True)]}" 
+                                    domain="[('model_id', '=', model_id)]" class="oe_inline" />
+                                <field name="batch_user_expression" attrs="{'invisible': [('batch_mode', '=', False)], 'required':  [('batch_mode', '=', True)]}" class="oe_inline"
+                                    placeholder="e.g. user.partner_id.id"/>
+                            </group>
                             <group string="Formating Options">
                                 <field name="display_mode" widget="radio" />
-                                <field name="suffix" placeholder="e.g. days"/>
+                                <field name="suffix" placeholder="e.g. days" class="oe_inline"/>
                                 <field name="monetary"/>
                             </group>
                             <group string="Clickable Goals" attrs="{'invisible': [('computation_mode', '=', 'manually')]}">
@@ -270,7 +293,7 @@
                     <field name="name"/>
                     <field name="model_id"/>
                     <field name="field_id"/>
-                    <group expand="0" string="Group By...">
+                    <group expand="0" string="Group By">
                         <filter string="Model" domain="[]" context="{'group_by':'model_id'}"/>
                         <filter string="Computation Mode" domain="[]" context="{'group_by':'computation_mode'}"/>
                     </group>

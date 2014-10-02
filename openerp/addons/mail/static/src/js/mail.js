@@ -507,18 +507,15 @@ openerp.mail = function (session) {
             }
             $.when(recipient_done).done(function (partner_ids) {
                 var context = {
-                    'default_composition_mode': default_composition_mode,
                     'default_parent_id': self.id,
                     'default_body': mail.ChatterUtils.get_text2html(self.$el ? (self.$el.find('textarea:not(.oe_compact)').val() || '') : ''),
                     'default_attachment_ids': _.map(self.attachment_ids, function (file) {return file.id;}),
                     'default_partner_ids': partner_ids,
+                    'default_is_log': self.is_log,
                     'mail_post_autofollow': true,
                     'mail_post_autofollow_partner_ids': partner_ids,
                     'is_private': self.is_private
                 };
-                if (self.is_log) {
-                    _.extend(context, {'mail_compose_log': true});
-                }
                 if (default_composition_mode != 'reply' && self.context.default_model && self.context.default_res_id) {
                     context.default_model = self.context.default_model;
                     context.default_res_id = self.context.default_res_id;
@@ -883,7 +880,7 @@ openerp.mail = function (session) {
             self.parent_thread.message_fetch(this.domain, this.context, false, function (arg, data) {
                 self.id = false;
                 // insert the message on dom after this message
-                self.parent_thread.switch_new_message( data, self.$el );
+                self.parent_thread.switch_new_message( data, self.$el.parent() );
                 self.animated_destroy(200);
             });
 
@@ -922,15 +919,45 @@ openerp.mail = function (session) {
             this.$('.oe_mail_expand').on('click', this.on_expand);
             this.$('.oe_mail_reduce').on('click', this.on_expand);
             this.$('.oe_mail_action_model').on('click', this.on_record_clicked);
+            this.$('.oe_mail_action_author').on('click', this.on_record_author_clicked);
         },
 
         on_record_clicked: function  (event) {
+            event.preventDefault();
+            var self = this;
             var state = {
                 'model': this.model,
                 'id': this.res_id,
                 'title': this.record_name
             };
             session.webclient.action_manager.do_push_state(state);
+            this.context.params = {
+                model: this.model,
+                res_id: this.res_id,
+            };
+            this.thread.ds_thread.call("message_redirect_action", {context: this.context}).then(function(action){
+                self.do_action(action); 
+            });
+        },
+
+        on_record_author_clicked: function  (event) {
+            event.preventDefault();
+            var partner_id = $(event.target).data('partner');
+            var state = {
+                'model': 'res.partner',
+                'id': partner_id,
+                'title': this.record_name
+            };
+            session.webclient.action_manager.do_push_state(state);
+            var action = {
+                type:'ir.actions.act_window',
+                view_type: 'form',
+                view_mode: 'form',
+                res_model: 'res.partner',
+                views: [[false, 'form']],
+                res_id: partner_id,
+            }
+            this.do_action(action);
         },
 
         /* Call the on_compose_message on the thread of this message. */
@@ -943,8 +970,8 @@ openerp.mail = function (session) {
 
         on_expand: function (event) {
             event.stopPropagation();
-            this.$('.oe_msg_body_short:first').toggle();
-            this.$('.oe_msg_body_long:first').toggle();
+            this.$('.oe_msg_body:first > .oe_msg_body_short:first').toggle();
+            this.$('.oe_msg_body:first > .oe_msg_body_long:first').toggle();
             return false;
         },
 
@@ -1888,11 +1915,11 @@ openerp.mail = function (session) {
          * @param {Object} defaults ??
          */
         load_searchview: function (defaults) {
-            var self = this;
             var ds_msg = new session.web.DataSetSearch(this, 'mail.message');
             this.searchview = new session.web.SearchView(this, ds_msg, false, defaults || {}, false);
-            this.searchview.appendTo(this.$('.oe_view_manager_view_search'))
-                .then(function () { self.searchview.on('search_data', self, self.do_searchview_search); });
+            this.searchview.on('search_data', this, this.do_searchview_search);
+            this.searchview.appendTo(this.$('.oe_view_manager_view_search'), 
+                                   this.$('.oe_searchview_drawer_container'));
             if (this.searchview.has_defaults) {
                 this.searchview.ready.then(this.searchview.do_search);
             }
@@ -1956,49 +1983,6 @@ openerp.mail = function (session) {
             this.$(".oe_write_onwall").click(function (event) { self.root.thread.on_compose_message(event); });
         }
     });
-
-
-    /**
-     * ------------------------------------------------------------
-     * UserMenu
-     * ------------------------------------------------------------
-     * 
-     * Add a link on the top user bar for write a full mail
-     */
-    session.web.ComposeMessageTopButton = session.web.Widget.extend({
-        template:'mail.ComposeMessageTopButton',
-
-        start: function () {
-            this.$('button').on('click', this.on_compose_message );
-            this._super();
-        },
-
-        on_compose_message: function (event) {
-            event.stopPropagation();
-            var action = {
-                type: 'ir.actions.act_window',
-                res_model: 'mail.compose.message',
-                view_mode: 'form',
-                view_type: 'form',
-                views: [[false, 'form']],
-                target: 'new',
-                context: {},
-            };
-            session.client.action_manager.do_action(action);
-        },
-    });
-
-    session.web.UserMenu.include({
-        do_update: function(){
-            var self = this;
-            this._super.apply(this, arguments);
-            this.update_promise.then(function() {
-                var mail_button = new session.web.ComposeMessageTopButton();
-                mail_button.appendTo(session.webclient.$el.find('.oe_systray'));
-            });
-        },
-    });
-
 
     /**
      * ------------------------------------------------------------
