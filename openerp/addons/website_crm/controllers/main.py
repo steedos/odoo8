@@ -30,7 +30,7 @@ class contactus(http.Controller):
         """ Allow to be overrided """
         return request.registry['crm.lead'].create(request.cr, SUPERUSER_ID, values, request.context)
 
-    def preRenderThanks(self, request, values, kwargs):
+    def preRenderThanks(self, values, kwargs):
         """ Allow to be overrided """
         company = request.website.company_id
         return {
@@ -38,6 +38,10 @@ class contactus(http.Controller):
             '_values': values,
             '_kwargs': kwargs,
         }
+
+    def get_contactus_response(self, values, kwargs):
+        values = self.preRenderThanks(values, kwargs)
+        return request.website.render(kwargs.get("view_callback", "website_crm.contactus_thanks"), values)
 
     @http.route(['/crm/contactus'], type='http', auth="public", website=True)
     def contactus(self, **kwargs):
@@ -58,7 +62,7 @@ class contactus(http.Controller):
         for field_name, field_value in kwargs.items():
             if hasattr(field_value, 'filename'):
                 post_file.append(field_value)
-            elif field_name in request.registry['crm.lead']._all_columns and field_name not in _BLACKLIST:
+            elif field_name in request.registry['crm.lead']._fields and field_name not in _BLACKLIST:
                 values[field_name] = field_value
             elif field_name not in _TECHNICAL:  # allow to add some free fields or blacklisted field like ID
                 post_description.append("%s: %s" % (field_name, field_value))
@@ -106,5 +110,4 @@ class contactus(http.Controller):
                 }
                 request.registry['ir.attachment'].create(request.cr, SUPERUSER_ID, attachment_value, context=request.context)
 
-        values = self.preRenderThanks(request, values, kwargs)
-        return request.website.render(kwargs.get("view_callback", "website_crm.contactus_thanks"), values)
+        return self.get_contactus_response(values, kwargs)

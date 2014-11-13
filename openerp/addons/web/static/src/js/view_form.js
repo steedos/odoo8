@@ -42,15 +42,15 @@ instance.web.form.FieldManagerMixin = {
     Gives new values for the fields contained in the view. The new values could not be setted
     right after the call to this method. Setting new values can trigger on_changes.
 
-    @param (dict) values A dictonnary with key = field name and value = new value.
-    @return (Deferred) Is resolved after all the values are setted.
+    @param {Object} values A dictonary with key = field name and value = new value.
+    @return {$.Deferred} Is resolved after all the values are setted.
     */
     set_values: function(values) {},
     /**
     Computes an OpenERP domain.
 
-    @param (list) expression An OpenERP domain.
-    @return (boolean) The computed value of the domain.
+    @param {Array} expression An OpenERP domain.
+    @return {boolean} The computed value of the domain.
     */
     compute_domain: function(expression) {},
     /**
@@ -58,7 +58,7 @@ instance.web.form.FieldManagerMixin = {
     the field are only supposed to use this context to evualuate their own, they should not
     extend it.
 
-    @return (CompoundContext) An OpenERP context.
+    @return {CompoundContext} An OpenERP context.
     */
     build_eval_context: function() {},
 };
@@ -120,6 +120,7 @@ instance.web.FormView = instance.web.View.extend(instance.web.form.FieldManagerM
         this.is_initialized = $.Deferred();
         this.mutating_mutex = new $.Mutex();
         this.save_list = [];
+        this.render_value_defs = [];
         this.reload_mutex = new $.Mutex();
         this.__clicked_inside = false;
         this.__blur_timeout = null;
@@ -256,7 +257,7 @@ instance.web.FormView = instance.web.View.extend(instance.web.form.FieldManagerM
                 this.dataset.ids.push(state.id);
             }
             this.dataset.select_id(state.id);
-            this.do_show({ reload: warm });
+            this.do_show();
         }
     },
     /**
@@ -674,6 +675,7 @@ instance.web.FormView = instance.web.View.extend(instance.web.form.FieldManagerM
         } else if (mode === "create") {
             mode = "edit";
         }
+        this.render_value_defs = [];
         this.set({actual_mode: mode});
     },
     check_actual_mode: function(source, options) {
@@ -724,12 +726,15 @@ instance.web.FormView = instance.web.View.extend(instance.web.form.FieldManagerM
         });
     },
     on_button_cancel: function(event) {
+        var self = this;
         if (this.can_be_discarded()) {
             if (this.get('actual_mode') === 'create') {
                 this.trigger('history_back');
             } else {
                 this.to_view_mode();
-                this.trigger('load_record', this.datarecord);
+                $.when.apply(null, this.render_value_defs).then(function(){
+                    self.trigger('load_record', self.datarecord);
+                });
             }
         }
         this.trigger('on_button_cancel');
@@ -2239,7 +2244,10 @@ instance.web.form.ReinitializeWidgetMixin =  {
 instance.web.form.ReinitializeFieldMixin =  _.extend({}, instance.web.form.ReinitializeWidgetMixin, {
     reinitialize: function() {
         instance.web.form.ReinitializeWidgetMixin.reinitialize.call(this);
-        this.render_value();
+        var res = this.render_value();
+        if (this.view && this.view.render_value_defs){
+            this.view.render_value_defs.push(res);
+        }
     },
 });
 
@@ -4381,28 +4389,25 @@ instance.web.form.One2ManyListView = instance.web.ListView.extend({
         this.o2m.trigger_on_change();
     },
     is_valid: function () {
-        var editor = this.editor;
-        var form = editor.form;
-        // If no edition is pending, the listview can not be invalid (?)
-        if (!editor.record) {
-            return true;
-        }
-        // If the form has not been modified, the view can only be valid
-        // NB: is_dirty will also be set on defaults/onchanges/whatever?
-        // oe_form_dirty seems to only be set on actual user actions
-        if (!form.$el.is('.oe_form_dirty')) {
+        var self = this;
+        if (!this.fields_view || !this.editable()){
             return true;
         }
         this.o2m._dirty_flag = true;
-
-        // Otherwise validate internal form
-        return _(form.fields).chain()
-            .invoke(function () {
-                this._check_css_flags();
-                return this.is_valid();
-            })
-            .all(_.identity)
-            .value();
+        var r;
+        return _.every(this.records.records, function(record){
+            r = record;
+            _.each(self.editor.form.fields, function(field){
+                field._inhibit_on_change_flag = true;
+                field.set_value(r.attributes[field.name]);
+                field._inhibit_on_change_flag = false;
+            });
+            return _.every(self.editor.form.fields, function(field){
+                field.process_modifiers();
+                field._check_css_flags();
+                return field.is_valid();
+            });
+        });
     },
     do_add_record: function () {
         if (this.editable()) {
@@ -4747,9 +4752,8 @@ instance.web.form.FieldMany2ManyTags = instance.web.form.AbstractField.extend(in
             self.render_tag(data);
         }
         if (! values || values.length > 0) {
-            this._display_orderer.add(self.get_render_data(values)).done(handle_names);
-        }
-        else{
+            return this._display_orderer.add(self.get_render_data(values)).done(handle_names);
+        } else {
             handle_names([]);
         }
     },
@@ -5760,7 +5764,7 @@ instance.web.form.FieldBinaryImage = instance.web.form.FieldBinary.extend({
  * Options on attribute ; "blockui" {Boolean} block the UI or not
  * during the file is uploading
  */
-instance.web.form.FieldMany2ManyBinaryMultiFiles = instance.web.form.AbstractField.extend({
+instance.web.form.FieldMany2ManyBinaryMultiFiles = instance.web.form.AbstractField.extend(instance.web.form.ReinitializeFieldMixin, {
     template: "FieldBinaryFileUploader",
     init: function(field_manager, node) {
         this._super(field_manager, node);
@@ -5775,8 +5779,7 @@ instance.web.form.FieldMany2ManyBinaryMultiFiles = instance.web.form.AbstractFie
         this.fileupload_id = _.uniqueId('oe_fileupload_temp');
         $(window).on(this.fileupload_id, _.bind(this.on_file_loaded, this));
     },
-    start: function() {
-        this._super(this);
+    initialize_content: function() {
         this.$el.on('change', 'input.oe_form_binary_file', this.on_file_change );
     },
     // WARNING: duplicated in 4 other M2M widgets

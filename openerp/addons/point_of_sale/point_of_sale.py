@@ -110,10 +110,21 @@ class pos_config(osv.osv):
                 return False
         return True
 
+    def _check_company_payment(self, cr, uid, ids, context=None):
+        for config in self.browse(cr, uid, ids, context=context):
+            journal_ids = [j.id for j in config.journal_ids]
+            if self.pool['account.journal'].search(cr, uid, [
+                    ('id', 'in', journal_ids),
+                    ('company_id', '!=', config.company_id.id)
+                ], count=True, context=context):
+                return False
+        return True
+
     _constraints = [
         (_check_cash_control, "You cannot have two cash controls in one Point Of Sale !", ['journal_ids']),
         (_check_company_location, "The company of the stock location is different than the one of point of sale", ['company_id', 'stock_location_id']),
         (_check_company_journal, "The company of the sale journal is different than the one of point of sale", ['company_id', 'journal_id']),
+        (_check_company_payment, "The company of a payment method is different than the one of point of sale", ['company_id', 'journal_ids']),
     ]
 
     def name_get(self, cr, uid, ids, context=None):
@@ -995,6 +1006,10 @@ class pos_order(osv.osv):
     def create_account_move(self, cr, uid, ids, context=None):
         return self._create_account_move_line(cr, uid, ids, None, None, context=context)
 
+    def _prepare_analytic_account(self, cr, uid, line, context=None):
+        '''This method is designed to be inherited in a custom module'''
+        return False
+
     def _create_account_move_line(self, cr, uid, ids, session=None, move_id=None, context=None):
         # Tricky, via the workflow, we only have one id in the ids variable
         """Create a account move line of order grouped by products or not."""
@@ -1143,6 +1158,7 @@ class pos_order(osv.osv):
                     'quantity': line.qty,
                     'product_id': line.product_id.id,
                     'account_id': income_account,
+                    'analytic_account_id': self._prepare_analytic_account(cr, uid, line, context=context),
                     'credit': ((amount>0) and amount) or 0.0,
                     'debit': ((amount<0) and -amount) or 0.0,
                     'tax_code_id': tax_code_id,

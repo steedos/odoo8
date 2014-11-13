@@ -485,15 +485,14 @@ class crm_lead(format_address, osv.osv):
         # Process the fields' values
         data = {}
         for field_name in fields:
-            field_info = self._all_columns.get(field_name)
-            if field_info is None:
+            field = self._fields.get(field_name)
+            if field is None:
                 continue
-            field = field_info.column
-            if field._type in ('many2many', 'one2many'):
+            if field.type in ('many2many', 'one2many'):
                 continue
-            elif field._type == 'many2one':
+            elif field.type == 'many2one':
                 data[field_name] = _get_first_not_null_id(field_name)  # !!
-            elif field._type == 'text':
+            elif field.type == 'text':
                 data[field_name] = _concat_all(field_name)  #not lost
             else:
                 data[field_name] = _get_first_not_null(field_name)  #not lost
@@ -508,22 +507,21 @@ class crm_lead(format_address, osv.osv):
             body.append("%s\n" % (title))
 
         for field_name in fields:
-            field_info = self._all_columns.get(field_name)
-            if field_info is None:
+            field = self._fields.get(field_name)
+            if field is None:
                 continue
-            field = field_info.column
             value = ''
 
-            if field._type == 'selection':
-                if hasattr(field.selection, '__call__'):
+            if field.type == 'selection':
+                if callable(field.selection):
                     key = field.selection(self, cr, uid, context=context)
                 else:
                     key = field.selection
                 value = dict(key).get(lead[field_name], lead[field_name])
-            elif field._type == 'many2one':
+            elif field.type == 'many2one':
                 if lead[field_name]:
                     value = lead[field_name].name_get()[0][1]
-            elif field._type == 'many2many':
+            elif field.type == 'many2many':
                 if lead[field_name]:
                     for val in lead[field_name]:
                         field_value = val.name_get()[0][1]
@@ -702,7 +700,6 @@ class crm_lead(format_address, osv.osv):
             'probability': lead.probability,
             'name': lead.name,
             'partner_id': customer and customer.id or False,
-            'user_id': (lead.user_id and lead.user_id.id),
             'type': 'opportunity',
             'date_action': fields.datetime.now(),
             'date_open': fields.datetime.now(),
@@ -958,7 +955,7 @@ class crm_lead(format_address, osv.osv):
         lead = self.browse(cr, uid, id, context=context)
         local_context = dict(context)
         local_context.setdefault('default_type', lead.type)
-        local_context.setdefault('default_section_id', lead.section_id)
+        local_context.setdefault('default_section_id', lead.section_id.id)
         if lead.type == 'opportunity':
             default['date_open'] = fields.datetime.now()
         else:
